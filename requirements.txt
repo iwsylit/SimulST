@@ -1,2 +1,4 @@
+miniaudio==1.61
+numpy==2.1.0
 torch==2.4.0
 transformers==4.44.2
