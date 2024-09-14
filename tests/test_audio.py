@@ -4,35 +4,30 @@ import miniaudio
 import numpy as np
 import pytest
 
-from simulst.audio import Audio
+from simulst.audio import Audio, AudioBatch
+
+SAMPLE_RATE = 16000
+NSAMPLES = SAMPLE_RATE * 4
 
 
 @pytest.fixture
 def audio1ch():
-    sample_rate = 16000
-    nchannels = 1
-    nsamples = sample_rate * 4
-
-    return Audio.fake(nsamples, nchannels, sample_rate)
+    return Audio.fake(NSAMPLES, 1, SAMPLE_RATE)
 
 
 @pytest.fixture
 def audio2ch():
-    sample_rate = 16000
-    nchannels = 2
-    nsamples = sample_rate * 4
-
-    return Audio.fake(nsamples, nchannels, sample_rate)
+    return Audio.fake(NSAMPLES, 2, SAMPLE_RATE)
 
 
 @pytest.fixture
 def audio1ch_32bit():
-    sample_rate = 16000
-    nchannels = 1
-    nsamples = sample_rate * 4
-    sample_format = miniaudio.SampleFormat.SIGNED32
+    return Audio.fake(NSAMPLES, 1, SAMPLE_RATE, miniaudio.SampleFormat.SIGNED32)
 
-    return Audio.fake(nsamples, nchannels, sample_rate, sample_format)
+
+@pytest.fixture
+def audio_batch():
+    return AudioBatch.fake(2, NSAMPLES, nchannels=1, sample_format=miniaudio.SampleFormat.SIGNED16)
 
 
 def test_duration(audio1ch, audio2ch):
@@ -88,3 +83,22 @@ def test_normalization(audio1ch):
 
 def test_normalization_32bit(audio1ch_32bit):
     assert audio1ch_32bit.samples.mean() == pytest.approx(0.0, abs=1e-2)
+
+
+def test_batch_len(audio_batch):
+    assert len(audio_batch) == 2
+
+
+def test_batch_num_samples(audio_batch):
+    for audio in audio_batch:
+        assert audio.num_samples == NSAMPLES
+
+
+def test_batch_num_channels(audio_batch):
+    for audio in audio_batch:
+        assert audio.nchannels == 1
+
+
+def test_batch_sample_rate(audio_batch):
+    for audio in audio_batch:
+        assert audio.sample_rate == SAMPLE_RATE

@@ -1,4 +1,4 @@
-from typing import Self
+from typing import Any, Iterator, Self
 
 import miniaudio
 import numpy as np
@@ -112,3 +112,39 @@ class Audio:
     @property
     def num_samples(self) -> int:
         return len(self._audio.samples)
+
+
+class AudioBatch:
+    def __init__(self, audios: list[Audio]) -> None:
+        self._audios = audios
+
+    @classmethod
+    def from_bytes(cls, bytes_list: list[bytes], **kwargs: Any) -> Self:
+        audios = [Audio.from_bytes(b, **kwargs) for b in bytes_list]
+
+        return cls(audios)
+
+    @classmethod
+    def from_files(cls, filenames: list[str], **kwargs: Any) -> Self:
+        audios = [Audio.from_file(f, **kwargs) for f in filenames]
+
+        return cls(audios)
+
+    @classmethod
+    def fake(cls, batch_size: int, nsamples: int, **kwargs: Any) -> Self:
+        audios = [Audio.fake(nsamples, **kwargs) for _ in range(batch_size)]
+
+        return cls(audios)
+
+    @property
+    def samples(self) -> list[np.ndarray]:
+        return [audio.samples for audio in self._audios]
+
+    def __len__(self) -> int:
+        return len(self._audios)
+
+    def __getitem__(self, index: int) -> Audio:
+        return self._audios[index]
+
+    def __iter__(self) -> Iterator[Audio]:
+        return iter(self._audios)
