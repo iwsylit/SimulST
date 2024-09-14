@@ -9,8 +9,12 @@ class Audio:
     _SAMPLE_RATE = 16000
     _NCHANNELS = 1
 
-    def __init__(self, audio: miniaudio.DecodedSoundFile) -> None:
+    def __init__(self, audio: miniaudio.DecodedSoundFile, normalize: bool = True) -> None:
         self._audio = audio
+        self._samples = np.array(self._audio.samples, dtype=np.float32)
+
+        if normalize:
+            self._samples /= 1 << 15
 
     @classmethod
     def from_bytes(
@@ -19,6 +23,7 @@ class Audio:
         nchannels: int = _NCHANNELS,
         sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
+        normalize: bool = True,
     ) -> Self:
         audio = miniaudio.decode(
             bytes,
@@ -27,7 +32,7 @@ class Audio:
             output_format=sample_format,
         )
 
-        return cls(audio)
+        return cls(audio, normalize)
 
     @classmethod
     def from_file(
@@ -36,6 +41,7 @@ class Audio:
         nchannels: int = _NCHANNELS,
         sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
+        normalize: bool = True,
     ) -> Self:
         audio = miniaudio.decode_file(
             filename,
@@ -44,7 +50,7 @@ class Audio:
             output_format=sample_format,
         )
 
-        return cls(audio)
+        return cls(audio, normalize)
 
     @classmethod
     def fake(
@@ -53,6 +59,7 @@ class Audio:
         nchannels: int = _NCHANNELS,
         sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
+        normalize: bool = True,
     ) -> Self:
         samples = miniaudio._array_proto_from_format(sample_format)
         samples.frombytes(np.random.randint(0, 100, nsamples * nchannels, dtype=np.int16).tobytes())
@@ -65,19 +72,14 @@ class Audio:
             sample_format=sample_format,
         )
 
-        return cls(audio)
+        return cls(audio, normalize)
 
-    def save(self, filename: str) -> None:
+    def to_wav(self, filename: str) -> None:
         miniaudio.wav_write_file(filename, self._audio)
 
     @property
-    def samples(self, normalize: bool = True) -> np.ndarray:
-        audio = np.array(self._audio.samples, dtype=np.float32)
-
-        if normalize:
-            audio /= 1 << 15
-
-        return audio
+    def samples(self) -> np.ndarray:
+        return self._samples
 
     @property
     def nchannels(self) -> int:
