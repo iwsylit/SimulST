@@ -55,9 +55,7 @@ class Audio:
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
     ) -> Self:
         samples = miniaudio._array_proto_from_format(sample_format)
-        samples.frombytes(
-            np.random.randint(0, 100, nsamples * nchannels, dtype=np.int16).tobytes()
-        )
+        samples.frombytes(np.random.randint(0, 100, nsamples * nchannels, dtype=np.int16).tobytes())
 
         audio = miniaudio.DecodedSoundFile(
             name="",
@@ -73,8 +71,13 @@ class Audio:
         miniaudio.wav_write_file(filename, self._audio)
 
     @property
-    def samples(self) -> np.ndarray:
-        return np.array(self._audio.samples, dtype=np.float32)
+    def samples(self, normalize: bool = True) -> np.ndarray:
+        audio = np.array(self._audio.samples, dtype=np.float32)
+
+        if normalize:
+            audio /= 1 << 15
+
+        return audio
 
     @property
     def nchannels(self) -> int:
