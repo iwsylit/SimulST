@@ -37,3 +37,13 @@ repos:
       - id: requirements-txt-fixer
       - id: trailing-whitespace
         stages: [commit]
+  - repo: local
+    hooks:
+    - id: pytest
+      name: pytest
+      entry: bash run_tests.sh
+      language: system
+      types: [python]
+      pass_filenames: false
+      always_run: true
+      stages: [push]
