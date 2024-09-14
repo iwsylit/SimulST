@@ -14,7 +14,7 @@ class Audio:
         self._samples = np.array(self._audio.samples, dtype=np.float32)
 
         if normalize:
-            self._samples /= 1 << 15
+            self._normalize()
 
     @classmethod
     def from_bytes(
@@ -76,6 +76,18 @@ class Audio:
 
     def to_wav(self, filename: str) -> None:
         miniaudio.wav_write_file(filename, self._audio)
+
+    def _normalize(self) -> None:
+        norm = {
+            miniaudio.SampleFormat.SIGNED16: 1 << 15,
+            miniaudio.SampleFormat.SIGNED24: 1 << 23,
+            miniaudio.SampleFormat.SIGNED32: 1 << 31,
+        }
+
+        if self._audio.sample_format not in norm:
+            raise ValueError(f"Unsupported sample format: {self._audio.sample_format}")
+
+        self._samples /= norm[self._audio.sample_format]
 
     @property
     def samples(self) -> np.ndarray:

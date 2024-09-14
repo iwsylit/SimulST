@@ -1,5 +1,6 @@
 # mypy: allow-untyped-defs
 
+import miniaudio
 import numpy as np
 import pytest
 
@@ -22,6 +23,16 @@ def audio2ch():
     nsamples = sample_rate * 4
 
     return Audio.fake(nsamples, nchannels, sample_rate)
+
+
+@pytest.fixture
+def audio1ch_32bit():
+    sample_rate = 16000
+    nchannels = 1
+    nsamples = sample_rate * 4
+    sample_format = miniaudio.SampleFormat.SIGNED32
+
+    return Audio.fake(nsamples, nchannels, sample_rate, sample_format)
 
 
 def test_duration(audio1ch, audio2ch):
@@ -69,3 +80,11 @@ def test_from_file(audio1ch, tmp_path):
     audio_from_file = Audio.from_file(file_path, nchannels=audio1ch.nchannels, sample_rate=audio1ch.sample_rate)
 
     np.testing.assert_array_equal(audio_from_file.samples, audio1ch.samples)
+
+
+def test_normalization(audio1ch):
+    assert audio1ch.samples.mean() == pytest.approx(0.0, abs=1e-2)
+
+
+def test_normalization_32bit(audio1ch_32bit):
+    assert audio1ch_32bit.samples.mean() == pytest.approx(0.0, abs=1e-2)
