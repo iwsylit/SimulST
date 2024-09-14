@@ -27,7 +27,7 @@ def audio1ch_32bit():
 
 @pytest.fixture
 def audio_batch():
-    return AudioBatch.fake(2, NSAMPLES, nchannels=1, sample_format=miniaudio.SampleFormat.SIGNED16)
+    return AudioBatch.fake(nsamples=NSAMPLES, nchannels=1, sample_format=miniaudio.SampleFormat.SIGNED16)
 
 
 def test_duration(audio1ch, audio2ch):
@@ -102,3 +102,8 @@ def test_batch_num_channels(audio_batch):
 def test_batch_sample_rate(audio_batch):
     for audio in audio_batch:
         assert audio.sample_rate == SAMPLE_RATE
+
+
+def test_batch_check_properties_equality(audio1ch, audio2ch):
+    with pytest.raises(ValueError):
+        AudioBatch([audio1ch, audio2ch])
