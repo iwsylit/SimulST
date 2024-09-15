@@ -34,3 +34,18 @@ def test_transcribe_eq(audio, whisper_model):
 def test_transcribe_error(whisper_model, audio):
     with pytest.raises(ValueError):
         whisper_model.transcribe(audio, "non_existent_language")
+
+
+def test_translation(whisper_model, audio):
+    assert whisper_model.translate(audio, "ru", "en") == whisper_model.translate(audio, "ru", "en")
+
+
+def test_translation_error(whisper_model, audio):
+    with pytest.raises(ValueError):
+        whisper_model.translate(audio, "ru", "non_existent_language")
+
+
+def test_translate_batch(whisper_model, audio_batch):
+    translation_batch = whisper_model.translate_batch(audio_batch, "ru", "en")
+
+    assert len(translation_batch) == len(audio_batch)

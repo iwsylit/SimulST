@@ -1,5 +1,4 @@
-from abc import ABC
-from typing import Self
+from typing import Self, Sequence
 
 from simulst.audio import Audio
 
@@ -22,14 +21,14 @@ class AudioTranscription:
         return self._transcription
 
     def __repr__(self) -> str:
-        return f"Audio: {self.audio.duration}s, Transcription: {self.transcription}"
+        return f"Source: [{self.audio}], Transcription: {self.transcription}"
 
     def __eq__(self, other: Self) -> bool:  # type: ignore
         return self.transcription == other.transcription
 
 
 class AudioTranscriptionBatch:
-    def __init__(self, transcriptions: list[AudioTranscription]) -> None:
+    def __init__(self, transcriptions: Sequence[AudioTranscription]) -> None:
         self._transcriptions = transcriptions
 
     @classmethod
@@ -51,21 +50,3 @@ class AudioTranscriptionBatch:
             return "AudioTranscriptionBatch:\n- " + "\n- ".join([repr(t) for t in self._transcriptions])
         else:
             return f"AudioTranscriptionBatch containing {len(self)} transcriptions"
-
-
-class Translation(ABC):
-    def __init__(self, source: str | Audio, translation: str, source_lang: str, target_lang: str) -> None:
-        self.source = source
-        self.translation = translation
-        self.source_lang = source_lang
-        self.target_lang = target_lang
-
-
-class TextTranslation(Translation):
-    def __init__(self, source: str, translation: str, source_lang: str, target_lang: str) -> None:
-        super().__init__(source, translation, source_lang, target_lang)
-
-
-class SpeechTranslation(Translation):
-    def __init__(self, source: Audio, translation: str, source_lang: str, target_lang: str) -> None:
-        super().__init__(source, translation, source_lang, target_lang)

@@ -1,4 +1,4 @@
-from typing import Any, Iterator, Self
+from typing import Any, Iterator, Self, Sequence
 
 import miniaudio
 import numpy as np
@@ -113,9 +113,12 @@ class Audio:
     def num_samples(self) -> int:
         return len(self._audio.samples)
 
+    def __repr__(self) -> str:
+        return f"Audio: {self.duration}s ({self.nchannels}ch, {self.sample_rate}Hz)"
+
 
 class AudioBatch:
-    def __init__(self, audios: list[Audio]) -> None:
+    def __init__(self, audios: Sequence[Audio]) -> None:
         self._audios = audios
 
         self._check_properties_equality()
