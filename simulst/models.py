@@ -4,6 +4,7 @@ from typing import Literal, Self
 import torch
 from torch import nn
 from transformers import WhisperForConditionalGeneration, WhisperProcessor
+from transformers.models.whisper.tokenization_whisper import LANGUAGES as whisper_langs
 
 from simulst.audio import Audio, AudioBatch
 from simulst.transcription import AudioTranscription, AudioTranscriptionBatch
@@ -45,6 +46,7 @@ class TranslationModel(BaseModel):
 
 
 class E2EModel(BaseModel):
+    _SUPPORTED_SOURCE_LANGUAGES: list[str] = []
     _SUPPORTED_TARGET_LANGUAGES: list[str] = []
 
     @abstractmethod
@@ -54,8 +56,20 @@ class E2EModel(BaseModel):
     def translate(self, audio: Audio, source_lang: str, target_lang: str) -> SpeechTranslation:
         return self.translate_batch(AudioBatch([audio]), source_lang, target_lang)[0]
 
+    def _check_supported_languages(self, source_lang: str | None, target_lang: str | None) -> None:
+        if source_lang and source_lang not in self._SUPPORTED_SOURCE_LANGUAGES:
+            raise ValueError(
+                f"Source language {source_lang} is not supported.\nSupported languages: {self._SUPPORTED_SOURCE_LANGUAGES}."  # noqa: E501
+            )
+
+        if target_lang and target_lang not in self._SUPPORTED_TARGET_LANGUAGES:
+            raise ValueError(
+                f"Target language {target_lang} is not supported.\nSupported languages: {self._SUPPORTED_TARGET_LANGUAGES}."  # noqa: E501
+            )
+
 
 class WhisperModel(AsrModel, E2EModel):
+    _SUPPORTED_SOURCE_LANGUAGES = list(whisper_langs.keys())
     _SUPPORTED_TARGET_LANGUAGES = ["en"]
 
     def __init__(self, path: str = "openai/whisper-base") -> None:
@@ -68,13 +82,22 @@ class WhisperModel(AsrModel, E2EModel):
     def from_pretrained(cls, path: str = "openai/whisper-base") -> Self:
         return cls(path)
 
+    @classmethod
+    def fake(cls) -> Self:
+        class FakeWhisperModel(cls):  # type: ignore
+            def __init__(self, path: str = "openai/whisper-base") -> None:
+                BaseModel.__init__(self)
+                self.fake_module = nn.Linear(1, 1)
+
+            def _run_model(
+                self, audios: AudioBatch, language: str, task: Literal["transcribe", "translate"]
+            ) -> list[str]:
+                return [f"fake {task}" for _ in audios]
+
+        return FakeWhisperModel()
+
     @torch.inference_mode()
-    def _run_model(
-        self,
-        audios: AudioBatch,
-        language: str,
-        task: Literal["transcribe", "translate"],
-    ) -> list[str]:
+    def _run_model(self, audios: AudioBatch, language: str, task: Literal["transcribe", "translate"]) -> list[str]:
         input_features = self.processor(audios.samples, sampling_rate=audios.sample_rate, return_tensors="pt")
         forced_decoder_ids = self.processor.get_decoder_prompt_ids(language=language, task=task)
 
@@ -83,6 +106,8 @@ class WhisperModel(AsrModel, E2EModel):
         return self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
 
     def transcribe_batch(self, audios: AudioBatch, language: str) -> AudioTranscriptionBatch:
+        self._check_supported_languages(language, None)
+
         transcriptions = self._run_model(audios, language, "transcribe")
 
         return AudioTranscriptionBatch(
@@ -90,10 +115,7 @@ class WhisperModel(AsrModel, E2EModel):
         )
 
     def translate_batch(self, audios: AudioBatch, source_lang: str, target_lang: str) -> SpeechTranslationBatch:
-        if target_lang not in self._SUPPORTED_TARGET_LANGUAGES:
-            raise ValueError(
-                f"Target language {target_lang} is not supported.\nSupported languages: {self._SUPPORTED_TARGET_LANGUAGES}."  # noqa: E501
-            )
+        self._check_supported_languages(source_lang, target_lang)
 
         translations = self._run_model(audios, source_lang, "translate")
 

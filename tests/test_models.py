@@ -8,7 +8,7 @@ from simulst.models import WhisperModel
 
 @pytest.fixture
 def whisper_model():
-    return WhisperModel("openai/whisper-tiny")
+    return WhisperModel.fake()
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def test_transcribe_error(whisper_model, audio):
         whisper_model.transcribe(audio, "non_existent_language")
 
 
-def test_translation(whisper_model, audio):
+def test_translation_eq(whisper_model, audio):
     assert whisper_model.translate(audio, "ru", "en") == whisper_model.translate(audio, "ru", "en")
 
 
