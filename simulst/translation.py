@@ -1,19 +1,40 @@
-from abc import ABC
 from typing import Generic, Self, Sequence, TypeVar
 
 from simulst.audio import Audio
 
+T = TypeVar("T", Audio, str)
 
-class Translation(ABC):
-    def __init__(self, source: str | Audio, translation: str, source_lang: str, target_lang: str) -> None:
-        self.source = source
-        self._translation = translation.strip()
-        self._source_lang = source_lang
-        self._target_lang = target_lang
+
+class Transcription(Generic[T]):
+    def __init__(self, source: T, target: str) -> None:
+        self._source: T = source
+        self._target = target
+
+    @classmethod
+    def fake(cls) -> Self:
+        raise NotImplementedError("Subclasses must implement this method")
 
     @property
-    def translation(self) -> str:
-        return self._translation
+    def source(self) -> T:
+        return self._source
+
+    @property
+    def target(self) -> str:
+        return self._target
+
+    def __repr__(self) -> str:
+        return f"Source: [{self.source}], Translation: {self.target}"
+
+    def __eq__(self, other: Self) -> bool:  # type: ignore
+        return self.target == other.target
+
+
+class Translation(Transcription, Generic[T]):
+    def __init__(self, source: T, target: str, source_lang: str, target_lang: str) -> None:
+        super().__init__(source, target)
+
+        self._source_lang = source_lang
+        self._target_lang = target_lang
 
     @property
     def source_lang(self) -> str:
@@ -23,48 +44,67 @@ class Translation(ABC):
     def target_lang(self) -> str:
         return self._target_lang
 
-    def __repr__(self) -> str:
-        return f"Source: [{self.source}], Translation ({self.source_lang} -> {self.target_lang}): {self.translation}"
 
-    def __eq__(self, other: Self) -> bool:  # type: ignore
-        return self.translation == other.translation and self.target_lang == other.target_lang
-
-
-class TextTranslation(Translation):
-    def __init__(self, source: str, translation: str, source_lang: str, target_lang: str) -> None:
-        super().__init__(source, translation, source_lang, target_lang)
+class SpeechTranscription(Transcription[Audio]):
+    @classmethod
+    def fake(cls) -> Self:
+        return cls(Audio.fake(), "fake transcription")
 
 
-class SpeechTranslation(Translation):
-    def __init__(self, source: Audio, translation: str, source_lang: str, target_lang: str) -> None:
-        super().__init__(source, translation, source_lang, target_lang)
+class SpeechTranslation(Translation[Audio]):
+    @classmethod
+    def fake(cls) -> Self:
+        return cls(Audio.fake(), "fake translation", "fake source lang", "fake target lang")
 
 
-T = TypeVar("T", bound=Translation)
+class TextTranslation(Translation[str]):
+    @classmethod
+    def fake(cls) -> Self:
+        return cls("fake source text", "fake translation", "fake source lang", "fake target lang")
 
 
-class TranslationBatch(ABC, Generic[T]):
-    def __init__(self, translations: Sequence[T]) -> None:
-        self._translations = translations
+B = TypeVar("B", SpeechTranscription, SpeechTranslation, TextTranslation)
+
+
+class TranscriptionBatch(Generic[B]):
+    def __init__(self, items: Sequence[B]) -> None:
+        self._items: list[B] = list(items)
+
+    @classmethod
+    def fake(cls, batch_size: int = 2) -> Self:
+        raise NotImplementedError("Subclasses must implement this method")
+
+    @property
+    def texts(self) -> list[str]:
+        return [item.target for item in self._items]
 
     def __len__(self) -> int:
-        return len(self._translations)
+        return len(self._items)
 
-    def __getitem__(self, index: int) -> T:
-        return self._translations[index]
+    def __getitem__(self, index: int) -> B:
+        return self._items[index]
 
     def __repr__(self) -> str:
+        class_name = self.__class__.__name__
         if len(self) <= 10:
-            return "TranslationBatch:\n- " + "\n- ".join([repr(t) for t in self._translations])
+            return f"{class_name}:\n- " + "\n- ".join([repr(t) for t in self._items])
         else:
-            return f"TranslationBatch containing {len(self)} translations"
+            return f"{class_name} containing {len(self)} items"
 
 
-class SpeechTranslationBatch(TranslationBatch[SpeechTranslation]):
-    def __init__(self, translations: Sequence[SpeechTranslation]) -> None:
-        super().__init__(translations)
+class SpeechTranscriptionBatch(TranscriptionBatch[SpeechTranscription]):
+    @classmethod
+    def fake(cls, batch_size: int = 2) -> Self:
+        return cls([SpeechTranscription.fake() for _ in range(batch_size)])
 
 
-class TextTranslationBatch(TranslationBatch[TextTranslation]):
-    def __init__(self, translations: Sequence[TextTranslation]) -> None:
-        super().__init__(translations)
+class SpeechTranslationBatch(TranscriptionBatch[SpeechTranslation]):
+    @classmethod
+    def fake(cls, batch_size: int = 2) -> Self:
+        return cls([SpeechTranslation.fake() for _ in range(batch_size)])
+
+
+class TextTranslationBatch(TranscriptionBatch[TextTranslation]):
+    @classmethod
+    def fake(cls, batch_size: int = 2) -> Self:
+        return cls([TextTranslation.fake() for _ in range(batch_size)])

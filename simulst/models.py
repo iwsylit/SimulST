@@ -7,8 +7,9 @@ from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from transformers.models.whisper.tokenization_whisper import LANGUAGES as whisper_langs
 
 from simulst.audio import Audio, AudioBatch
-from simulst.transcription import AudioTranscription, AudioTranscriptionBatch
 from simulst.translation import (
+    SpeechTranscription,
+    SpeechTranscriptionBatch,
     SpeechTranslation,
     SpeechTranslationBatch,
     TextTranslation,
@@ -27,22 +28,22 @@ class BaseModel(ABC, nn.Module):
 
 class AsrModel(BaseModel):
     @abstractmethod
-    def transcribe_batch(self, audios: AudioBatch, language: str) -> AudioTranscriptionBatch:
+    def transcribe_batch(self, audios: AudioBatch, language: str) -> SpeechTranscriptionBatch:
         pass
 
-    def transcribe(self, audio: Audio, language: str) -> AudioTranscription:
+    def transcribe(self, audio: Audio, language: str) -> SpeechTranscription:
         return self.transcribe_batch(AudioBatch([audio]), language)[0]
 
 
 class TranslationModel(BaseModel):
     @abstractmethod
     def translate_batch(
-        self, texts: AudioTranscriptionBatch, source_lang: str, target_lang: str
+        self, texts: SpeechTranscriptionBatch, source_lang: str, target_lang: str
     ) -> TextTranslationBatch:
         pass
 
-    def translate(self, text: AudioTranscription, source_lang: str, target_lang: str) -> TextTranslation:
-        return self.translate_batch(AudioTranscriptionBatch([text]), source_lang, target_lang)[0]
+    def translate(self, text: SpeechTranscription, source_lang: str, target_lang: str) -> TextTranslation:
+        return self.translate_batch(SpeechTranscriptionBatch([text]), source_lang, target_lang)[0]
 
 
 class E2EModel(BaseModel):
@@ -105,13 +106,13 @@ class WhisperModel(AsrModel, E2EModel):
 
         return self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
 
-    def transcribe_batch(self, audios: AudioBatch, language: str) -> AudioTranscriptionBatch:
+    def transcribe_batch(self, audios: AudioBatch, language: str) -> SpeechTranscriptionBatch:
         self._check_supported_languages(language, None)
 
         transcriptions = self._run_model(audios, language, "transcribe")
 
-        return AudioTranscriptionBatch(
-            [AudioTranscription(audio, transcription) for audio, transcription in zip(audios, transcriptions)]
+        return SpeechTranscriptionBatch(
+            [SpeechTranscription(audio, transcription) for audio, transcription in zip(audios, transcriptions)]
         )
 
     def translate_batch(self, audios: AudioBatch, source_lang: str, target_lang: str) -> SpeechTranslationBatch:
