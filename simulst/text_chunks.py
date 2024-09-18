@@ -1,24 +1,38 @@
+import re
 from functools import reduce
 from typing import Iterator, Self, Sequence
 
 from simulst.translation import Translation
 
+_CLEAN_TEXT_REGEX = re.compile(r"[^\w\s]")
+_CLEAN_END_REGEX = re.compile(r"[^\w]+$")
+
 
 class TextChunk:
     def __init__(self, text: str) -> None:
         self._text = text
-        self._clean_text = self._clean()
 
     @classmethod
     def from_translation(cls, translation: Translation) -> Self:
         return cls(translation.target)
 
     def _clean(self) -> str:
-        return "".join(char for char in self.text if char.isalnum() or char.isspace()).lower()
+        return _CLEAN_TEXT_REGEX.sub("", self.text).lower().strip()
+
+    def _decapitalize(self) -> str:
+        return self.text[0].lower() + self.text[1:]
 
     @property
     def text(self) -> str:
         return self._text
+
+    @property
+    def clean_text(self) -> str:
+        return self._clean()
+
+    @property
+    def decapitalized_text(self) -> str:
+        return self._decapitalize()
 
     def __len__(self) -> int:
         return len(self.text)
@@ -47,6 +61,9 @@ class TextChunks:
     def __iter__(self) -> Iterator[TextChunk]:
         return iter(self._chunks)
 
+    def __len__(self) -> int:
+        return len(self._chunks)
+
 
 class ConcatenatedText(TextChunks):
     _MAX_OVERLAP = 10
@@ -63,10 +80,13 @@ class ConcatenatedText(TextChunks):
 
     def _concat_on_overlap(self, chunk1: TextChunk, chunk2: TextChunk) -> TextChunk:
         for size in reversed(range(min(len(chunk2), self._MAX_OVERLAP))):
-            if chunk1._clean_text.endswith(chunk2._clean_text[:size]):
+            if chunk1.clean_text.endswith(chunk2.clean_text[:size]):
                 break
 
-        return TextChunk(chunk1.text[: len(chunk1) - size] + chunk2.text[1:])
+        if size == 0:
+            return TextChunk(chunk1.text + " " + chunk2.decapitalized_text)
+
+        return TextChunk(_CLEAN_END_REGEX.sub("", chunk1.text) + chunk2.text[size:])
 
     def _concatenate(self, chunks: list[TextChunk]) -> TextChunk:
         return reduce(self._concat_on_overlap, chunks)

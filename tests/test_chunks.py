@@ -10,13 +10,21 @@ def test_concatenated_chunks_2():
 
 
 def test_concatenated_chunks_3():
-    # TODO: fix this test
     chunks = [
-        TextChunk("Границы моего языка!!!"),
+        TextChunk("Границы моего языка !!!"),
         TextChunk("Языка определяют границы моего сознания..."),
-        TextChunk("   Сознания определяют границы моего языка."),
+        TextChunk("Сознания определяют границы моего языка."),
     ]
 
     assert ConcatenatedText(chunks) == TextChunk(
         "Границы моего языка определяют границы моего сознания определяют границы моего языка."
     )
+
+
+def test_concatenated_chunks_4():
+    chunks = [
+        TextChunk("Границы моего языка"),
+        TextChunk("определяют границы моего сознания."),
+    ]
+
+    assert ConcatenatedText(chunks) == TextChunk("Границы моего языка определяют границы моего сознания.")
