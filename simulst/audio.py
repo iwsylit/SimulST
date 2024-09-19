@@ -1,3 +1,4 @@
+import array
 from typing import Any, Iterator, Self, Sequence
 
 import miniaudio
@@ -9,12 +10,14 @@ class Audio:
     _SAMPLE_RATE = 16000
     _NCHANNELS = 1
 
-    def __init__(self, audio: miniaudio.DecodedSoundFile, normalize: bool = True) -> None:
-        self._audio = audio
-        self._samples = np.array(self._audio.samples, dtype=np.float32)
+    _NORM = {
+        miniaudio.SampleFormat.SIGNED16: 1 << 15,
+        miniaudio.SampleFormat.SIGNED24: 1 << 23,
+        miniaudio.SampleFormat.SIGNED32: 1 << 31,
+    }
 
-        if normalize:
-            self._normalize()
+    def __init__(self, audio: miniaudio.DecodedSoundFile) -> None:
+        self._audio = audio
 
     @classmethod
     def from_bytes(
@@ -23,7 +26,6 @@ class Audio:
         nchannels: int = _NCHANNELS,
         sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
-        normalize: bool = True,
     ) -> Self:
         audio = miniaudio.decode(
             bytes,
@@ -32,7 +34,7 @@ class Audio:
             output_format=sample_format,
         )
 
-        return cls(audio, normalize)
+        return cls(audio)
 
     @classmethod
     def from_file(
@@ -41,7 +43,6 @@ class Audio:
         nchannels: int = _NCHANNELS,
         sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
-        normalize: bool = True,
     ) -> Self:
         audio = miniaudio.decode_file(
             filename,
@@ -50,7 +51,35 @@ class Audio:
             output_format=sample_format,
         )
 
-        return cls(audio, normalize)
+        return cls(audio)
+
+    @classmethod
+    def from_numpy(
+        cls,
+        samples: np.ndarray,
+        nchannels: int = _NCHANNELS,
+        sample_rate: int = _SAMPLE_RATE,
+        sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
+    ) -> Self:
+        def numpy_to_array_typecode(dtype: np.dtype) -> str:
+            if dtype == np.int16:
+                return "h"
+            elif dtype == np.int32:
+                return "i"
+            elif dtype == np.float32:
+                return "f"
+            else:
+                raise ValueError(f"Unsupported dtype: {dtype}")
+
+        audio = miniaudio.DecodedSoundFile(
+            name="",
+            nchannels=nchannels,
+            sample_rate=sample_rate,
+            sample_format=sample_format,
+            samples=array.array(numpy_to_array_typecode(samples.dtype), samples.tobytes()),
+        )
+
+        return cls(audio)
 
     @classmethod
     def fake(
@@ -59,7 +88,6 @@ class Audio:
         nchannels: int = _NCHANNELS,
         sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
-        normalize: bool = True,
     ) -> Self:
         samples = miniaudio._array_proto_from_format(sample_format)
         samples.frombytes(np.random.randint(0, 100, nsamples * nchannels, dtype=np.int16).tobytes())
@@ -72,26 +100,21 @@ class Audio:
             sample_format=sample_format,
         )
 
-        return cls(audio, normalize)
+        return cls(audio)
 
-    def to_wav(self, filename: str) -> None:
+    def wav(self, filename: str) -> None:
         miniaudio.wav_write_file(filename, self._audio)
 
-    def _normalize(self) -> None:
-        norm = {
-            miniaudio.SampleFormat.SIGNED16: 1 << 15,
-            miniaudio.SampleFormat.SIGNED24: 1 << 23,
-            miniaudio.SampleFormat.SIGNED32: 1 << 31,
-        }
+    def numpy(self, normalize: bool = False) -> np.ndarray:
+        samples = np.array(self._audio.samples, dtype=np.float32)
 
-        if self._audio.sample_format not in norm:
-            raise ValueError(f"Unsupported sample format: {self._audio.sample_format}")
+        if normalize:
+            if self._audio.sample_format not in self._NORM:
+                raise ValueError(f"Unsupported sample format: {self._audio.sample_format}")
 
-        self._samples /= norm[self._audio.sample_format]
+            return samples / self._NORM[self._audio.sample_format]
 
-    @property
-    def samples(self) -> np.ndarray:
-        return self._samples
+        return samples
 
     @property
     def nchannels(self) -> int:
@@ -114,7 +137,7 @@ class Audio:
         return len(self._audio.samples)
 
     def __repr__(self) -> str:
-        return f"Audio: {self.duration}s ({self.nchannels}ch, {self.sample_rate}Hz)"
+        return f"Audio: {self.duration:.2f}s ({self.nchannels}ch, {self.sample_rate}Hz)"
 
 
 class AudioBatch:
@@ -141,9 +164,8 @@ class AudioBatch:
 
         return cls(audios)
 
-    @property
-    def samples(self) -> list[np.ndarray]:
-        return [audio.samples for audio in self._audios]
+    def numpy(self, normalize: bool = False) -> list[np.ndarray]:
+        return [audio.numpy(normalize) for audio in self._audios]
 
     @property
     def nchannels(self) -> int:

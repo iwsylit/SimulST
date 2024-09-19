@@ -57,32 +57,42 @@ def test_num_frames(audio1ch, audio2ch):
 def test_from_bytes(audio1ch, tmp_path):
     file_path = str(tmp_path / "test_audio.wav")
 
-    audio1ch.to_wav(file_path)
+    audio1ch.wav(file_path)
 
     with open(file_path, "rb") as f:
         bytes = f.read()
 
     audio_from_bytes = Audio.from_bytes(bytes, nchannels=audio1ch.nchannels, sample_rate=audio1ch.sample_rate)
 
-    np.testing.assert_array_equal(audio_from_bytes.samples, audio1ch.samples)
+    np.testing.assert_array_equal(audio_from_bytes.numpy(), audio1ch.numpy())
 
 
 def test_from_file(audio1ch, tmp_path):
     file_path = str(tmp_path / "test_audio.wav")
 
-    audio1ch.to_wav(file_path)
+    audio1ch.wav(file_path)
 
     audio_from_file = Audio.from_file(file_path, nchannels=audio1ch.nchannels, sample_rate=audio1ch.sample_rate)
 
-    np.testing.assert_array_equal(audio_from_file.samples, audio1ch.samples)
+    np.testing.assert_array_equal(audio_from_file.numpy(), audio1ch.numpy())
+
+
+def test_from_numpy(audio1ch, audio1ch_32bit, audio2ch):
+    audio_from_numpy = Audio.from_numpy(audio1ch.numpy())
+    audio_from_numpy_32bit = Audio.from_numpy(audio1ch_32bit.numpy())
+    audio_from_numpy_2ch = Audio.from_numpy(audio2ch.numpy())
+
+    np.testing.assert_array_equal(audio_from_numpy.numpy(), audio1ch.numpy())
+    np.testing.assert_array_equal(audio_from_numpy_32bit.numpy(), audio1ch_32bit.numpy())
+    np.testing.assert_array_equal(audio_from_numpy_2ch.numpy(), audio2ch.numpy())
 
 
 def test_normalization(audio1ch):
-    assert audio1ch.samples.mean() == pytest.approx(0.0, abs=1e-2)
+    assert audio1ch.numpy(normalize=True).mean() == pytest.approx(0.0, abs=1e-2)
 
 
 def test_normalization_32bit(audio1ch_32bit):
-    assert audio1ch_32bit.samples.mean() == pytest.approx(0.0, abs=1e-2)
+    assert audio1ch_32bit.numpy(normalize=True).mean() == pytest.approx(0.0, abs=1e-2)
 
 
 def test_batch_len(audio_batch):
