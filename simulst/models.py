@@ -99,7 +99,9 @@ class WhisperModel(AsrModel, E2EModel):
 
     @torch.inference_mode()
     def _run_model(self, audios: AudioBatch, language: str, task: Literal["transcribe", "translate"]) -> list[str]:
-        input_features = self.processor(audios.samples, sampling_rate=audios.sample_rate, return_tensors="pt")
+        input_features = self.processor(
+            audios.numpy(normalize=True), sampling_rate=audios.sample_rate, return_tensors="pt"
+        )
         forced_decoder_ids = self.processor.get_decoder_prompt_ids(language=language, task=task)
 
         predicted_ids = self.model.generate(input_features.input_features, forced_decoder_ids=forced_decoder_ids)
