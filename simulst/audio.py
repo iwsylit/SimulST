@@ -1,8 +1,19 @@
 import array
-from typing import Any, Iterator, Self, Sequence
+from typing import Any, Callable, Iterator, Self, Sequence
 
 import miniaudio
 import numpy as np
+
+
+def _numpy_to_array_typecode(dtype: np.dtype) -> str:
+    if dtype == np.int16:
+        return "h"
+    elif dtype == np.int32:
+        return "i"
+    elif dtype == np.float32:
+        return "f"
+    else:
+        raise ValueError(f"Unsupported dtype: {dtype}")
 
 
 class Audio:
@@ -20,38 +31,33 @@ class Audio:
         self._audio = audio
 
     @classmethod
-    def from_bytes(
+    def _create(
         cls,
-        bytes: bytes,
+        factory_method: Callable,
         nchannels: int = _NCHANNELS,
         sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
+        **kwargs: Any,
     ) -> Self:
-        audio = miniaudio.decode(
-            bytes,
-            nchannels=nchannels,
-            sample_rate=sample_rate,
-            output_format=sample_format,
-        )
+        audio = factory_method(nchannels=nchannels, sample_rate=sample_rate, output_format=sample_format, **kwargs)
 
         return cls(audio)
 
     @classmethod
-    def from_file(
-        cls,
-        filename: str,
-        nchannels: int = _NCHANNELS,
-        sample_rate: int = _SAMPLE_RATE,
-        sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
-    ) -> Self:
-        audio = miniaudio.decode_file(
-            filename,
-            nchannels=nchannels,
-            sample_rate=sample_rate,
-            output_format=sample_format,
-        )
+    def from_bytes(cls, bytes: bytes, **kwargs: Any) -> Self:
+        """
+        :param bytes: The bytes to decode.
+        :param kwargs: Additional arguments to pass to the miniaudio.decode function.
+        """
+        return cls._create(miniaudio.decode, data=bytes, **kwargs)
 
-        return cls(audio)
+    @classmethod
+    def from_file(cls, filename: str, **kwargs: Any) -> Self:
+        """
+        :param filename: The filename to decode.
+        :param kwargs: Additional arguments to pass to the miniaudio.decode_file function.
+        """
+        return cls._create(miniaudio.decode_file, filename=filename, **kwargs)
 
     @classmethod
     def from_numpy(
@@ -61,22 +67,12 @@ class Audio:
         sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
     ) -> Self:
-        def numpy_to_array_typecode(dtype: np.dtype) -> str:
-            if dtype == np.int16:
-                return "h"
-            elif dtype == np.int32:
-                return "i"
-            elif dtype == np.float32:
-                return "f"
-            else:
-                raise ValueError(f"Unsupported dtype: {dtype}")
-
         audio = miniaudio.DecodedSoundFile(
             name="",
             nchannels=nchannels,
             sample_rate=sample_rate,
             sample_format=sample_format,
-            samples=array.array(numpy_to_array_typecode(samples.dtype), samples.tobytes()),
+            samples=array.array(_numpy_to_array_typecode(samples.dtype), samples.tobytes()),
         )
 
         return cls(audio)
