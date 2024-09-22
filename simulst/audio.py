@@ -103,6 +103,8 @@ class Audio:
 
     def numpy(self, normalize: bool = False) -> np.ndarray:
         samples = np.array(self._audio.samples, dtype=np.float32)
+        if self.nchannels > 1:
+            samples = samples.reshape(self.nchannels, -1)
 
         if normalize:
             if self._audio.sample_format not in self._NORM:
@@ -111,6 +113,17 @@ class Audio:
             return samples / self._NORM[self._audio.sample_format]
 
         return samples
+
+    def _equal_properties(self, other: Self) -> bool:
+        return (
+            self.nchannels == other.nchannels
+            and self.sample_rate == other.sample_rate
+            and self.sample_format == other.sample_format
+        )
+
+    def _check_properties_equality(self, other: Self) -> None:
+        if not self._equal_properties(other):
+            raise ValueError("Both audios must have the same number of channels, sample rate and sample format")
 
     @property
     def nchannels(self) -> int:
@@ -132,8 +145,36 @@ class Audio:
     def num_samples(self) -> int:
         return len(self._audio.samples)
 
+    @property
+    def sample_format(self) -> miniaudio.SampleFormat:
+        return self._audio.sample_format
+
     def __repr__(self) -> str:
         return f"Audio: {self.duration:.2f}s ({self.nchannels}ch, {self.sample_rate}Hz)"
+
+    def __eq__(self, other: Self) -> bool:  # type: ignore
+        if not self._equal_properties(other):
+            return False
+
+        return np.array_equal(self.numpy(), other.numpy())
+
+    def __add__(self, other: Self) -> Self:
+        self._check_properties_equality(other)
+
+        return Audio.from_numpy(
+            np.concatenate([self.numpy(), other.numpy()]),
+            nchannels=self.nchannels,
+            sample_rate=self.sample_rate,
+            sample_format=self._audio.sample_format,
+        )  # type: ignore
+
+    def __getitem__(self, slice: slice) -> Self:
+        return Audio.from_numpy(
+            self.numpy()[..., slice],
+            nchannels=self.nchannels,
+            sample_rate=self.sample_rate,
+            sample_format=self._audio.sample_format,
+        )  # type: ignore
 
 
 class AudioBatch:
@@ -172,12 +213,8 @@ class AudioBatch:
         return self._audios[0].sample_rate
 
     def _check_properties_equality(self) -> None:
-        for audio in self._audios:
-            if audio.nchannels != self.nchannels:
-                raise ValueError("All audios must have the same number of channels")
-
-            if audio.sample_rate != self.sample_rate:
-                raise ValueError("All audios must have the same sample rate")
+        if not all(self._audios[0]._equal_properties(audio) for audio in self._audios):
+            raise ValueError("All audios must have the same number of channels, sample rate and sample format")
 
     def __len__(self) -> int:
         return len(self._audios)

@@ -80,11 +80,45 @@ def test_from_file(audio1ch, tmp_path):
 def test_from_numpy(audio1ch, audio1ch_32bit, audio2ch):
     audio_from_numpy = Audio.from_numpy(audio1ch.numpy())
     audio_from_numpy_32bit = Audio.from_numpy(audio1ch_32bit.numpy())
-    audio_from_numpy_2ch = Audio.from_numpy(audio2ch.numpy())
+    audio_from_numpy_2ch = Audio.from_numpy(audio2ch.numpy(), nchannels=2)
 
     np.testing.assert_array_equal(audio_from_numpy.numpy(), audio1ch.numpy())
     np.testing.assert_array_equal(audio_from_numpy_32bit.numpy(), audio1ch_32bit.numpy())
     np.testing.assert_array_equal(audio_from_numpy_2ch.numpy(), audio2ch.numpy())
+
+
+def test_eq(audio1ch, audio1ch_32bit, audio2ch):
+    assert audio1ch == audio1ch
+    assert audio1ch != audio2ch
+    assert audio1ch != audio1ch_32bit
+
+
+def test_add(audio1ch, audio2ch):
+    audio_concat = audio1ch + audio1ch
+
+    assert audio_concat.numpy().shape == (NSAMPLES * 2,)
+
+    np.testing.assert_array_equal(audio_concat.numpy(), np.concatenate([audio1ch.numpy(), audio1ch.numpy()]))
+
+    audio_concat._check_properties_equality(audio1ch)
+    with pytest.raises(ValueError):
+        audio1ch + audio2ch
+
+
+def test_slice(audio1ch):
+    audio_slice = audio1ch[1000:2000]
+
+    assert audio_slice.numpy().shape == (1000,)
+    audio_slice._check_properties_equality(audio1ch)
+    np.testing.assert_array_equal(audio_slice.numpy(), audio1ch.numpy()[1000:2000])
+
+
+def test_slice_2ch(audio2ch):
+    audio_slice = audio2ch[1000:2000]
+
+    assert audio_slice.numpy().shape == (2, 1000)
+    audio_slice._check_properties_equality(audio2ch)
+    np.testing.assert_array_equal(audio_slice.numpy(), audio2ch.numpy()[..., 1000:2000])
 
 
 def test_normalization(audio1ch):
@@ -99,18 +133,10 @@ def test_batch_len(audio_batch):
     assert len(audio_batch) == 2
 
 
-def test_batch_num_samples(audio_batch):
+def test_batch_prop(audio_batch):
     for audio in audio_batch:
         assert audio.num_samples == NSAMPLES
-
-
-def test_batch_num_channels(audio_batch):
-    for audio in audio_batch:
         assert audio.nchannels == 1
-
-
-def test_batch_sample_rate(audio_batch):
-    for audio in audio_batch:
         assert audio.sample_rate == SAMPLE_RATE
 
 
