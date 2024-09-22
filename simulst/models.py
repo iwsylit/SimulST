@@ -16,6 +16,8 @@ from simulst.translation import (
     TextTranslationBatch,
 )
 
+# TODO: make this class ok and fix the class structure
+
 
 class BaseModel(ABC, nn.Module):
     def __init__(self) -> None:
@@ -70,6 +72,7 @@ class E2EModel(BaseModel):
 
 
 class WhisperModel(AsrModel, E2EModel):
+
     _SUPPORTED_SOURCE_LANGUAGES = list(whisper_langs.keys())
     _SUPPORTED_TARGET_LANGUAGES = ["en"]
 
@@ -78,6 +81,15 @@ class WhisperModel(AsrModel, E2EModel):
 
         self.model = WhisperForConditionalGeneration.from_pretrained(path)
         self.processor = WhisperProcessor.from_pretrained(path)
+        self._generation_params = {
+            "prompt_condition_type": "all-segments",
+            "condition_on_prev_tokens": True,
+            "compression_ratio_threshold": 1.35,
+            "logprob_threshold": -1.0,
+            "no_speech_threshold": 0.6,
+            "num_beams": 5,
+            "temperature": 0.0,
+        }
 
     @classmethod
     def from_pretrained(cls, path: str = "openai/whisper-base") -> Self:
@@ -98,13 +110,28 @@ class WhisperModel(AsrModel, E2EModel):
         return FakeWhisperModel()
 
     @torch.inference_mode()
-    def _run_model(self, audios: AudioBatch, language: str, task: Literal["transcribe", "translate"]) -> list[str]:
+    def _run_model(
+        self,
+        audios: AudioBatch,
+        language: str,
+        task: Literal["transcribe", "translate"],
+        prev_transcript: SpeechTranscriptionBatch | None = None,
+    ) -> list[str]:
         input_features = self.processor(
             audios.numpy(normalize=True), sampling_rate=audios.sample_rate, return_tensors="pt"
         )
         forced_decoder_ids = self.processor.get_decoder_prompt_ids(language=language, task=task)
 
-        predicted_ids = self.model.generate(input_features.input_features, forced_decoder_ids=forced_decoder_ids)
+        prompt_ids = (
+            self.processor.get_prompt_ids(prev_transcript.target, return_tensors="pt") if prev_transcript else None
+        )
+
+        predicted_ids = self.model.generate(
+            input_features.input_features,
+            forced_decoder_ids=forced_decoder_ids,
+            prompt_ids=prompt_ids,
+            **self._generation_params,
+        )
 
         return self.processor.batch_decode(predicted_ids, skip_special_tokens=True)
 
@@ -128,3 +155,10 @@ class WhisperModel(AsrModel, E2EModel):
                 for audio, translation in zip(audios, translations)
             ]
         )
+
+    def transcribe_conditioned(
+        self, audio: Audio, language: str, prev_transcript: SpeechTranscriptionBatch
+    ) -> SpeechTranscription:
+        transcription = self._run_model(AudioBatch([audio]), language, "transcribe", prev_transcript)[0]
+
+        return SpeechTranscription(audio, transcription)

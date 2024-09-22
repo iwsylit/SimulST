@@ -4,11 +4,10 @@ from typing import Iterator, Self, Sequence
 
 from simulst.translation import Translation
 
-_CLEAN_TEXT_REGEX = re.compile(r"[^\w\s]")
-_CLEAN_END_REGEX = re.compile(r"[^\w]+$")
-
 
 class TextChunk:
+    _CLEAN_TEXT_REGEX = re.compile(r"[^\w\s]")
+
     def __init__(self, text: str) -> None:
         self._text = text
 
@@ -17,7 +16,7 @@ class TextChunk:
         return cls(translation.target)
 
     def _clean(self) -> str:
-        return _CLEAN_TEXT_REGEX.sub("", self.text).lower().strip()
+        return self._CLEAN_TEXT_REGEX.sub("", self.text).lower().strip()
 
     def _decapitalize(self) -> str:
         return self.text[0].lower() + self.text[1:]
@@ -66,6 +65,7 @@ class TextChunks:
 
 
 class ConcatenatedText(TextChunks):
+    _CLEAN_END_REGEX = re.compile(r"[^\w]+$")
     _MAX_OVERLAP = 10
 
     def __init__(self, chunks: Sequence[TextChunk]) -> None:
@@ -86,7 +86,7 @@ class ConcatenatedText(TextChunks):
         if size == 0:
             return TextChunk(chunk1.text + " " + chunk2.decapitalized_text)
 
-        return TextChunk(_CLEAN_END_REGEX.sub("", chunk1.text) + chunk2.text[size:])
+        return TextChunk(self._CLEAN_END_REGEX.sub("", chunk1.text) + chunk2.text[size:])
 
     def _concatenate(self, chunks: list[TextChunk]) -> TextChunk:
         return reduce(self._concat_on_overlap, chunks)

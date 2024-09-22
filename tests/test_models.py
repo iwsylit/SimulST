@@ -21,6 +21,11 @@ def audio_batch():
     return AudioBatch.fake()
 
 
+@pytest.fixture
+def true_whisper():
+    return WhisperModel.from_pretrained("openai/whisper-tiny")
+
+
 def test_transcribe_batch(whisper_model, audio_batch):
     transcription_batch = whisper_model.transcribe_batch(audio_batch, "ru")
 
@@ -49,3 +54,13 @@ def test_translate_batch(whisper_model, audio_batch):
     translation_batch = whisper_model.translate_batch(audio_batch, "ru", "en")
 
     assert len(translation_batch) == len(audio_batch)
+
+
+@pytest.mark.slow
+def test_prompt_condition(true_whisper, audio):
+    # TODO: create true tests
+    try:
+        transcription = true_whisper.transcribe_conditioned(audio, "ru", None)
+        transcription = true_whisper.transcribe_conditioned(audio, "ru", transcription)
+    except Exception as e:
+        pytest.fail(f"Test failed with error: {e}")

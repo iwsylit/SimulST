@@ -75,7 +75,7 @@ class TranscriptionBatch(Generic[B]):
         raise NotImplementedError("Subclasses must implement this method")
 
     @property
-    def texts(self) -> list[str]:
+    def target(self) -> list[str]:
         return [item.target for item in self._items]
 
     def __len__(self) -> int:
