@@ -77,29 +77,37 @@ class StreamlitWebRtcAsrStream(AsrStream):
         buffer = Audio.empty(1, sample_rate=self._sample_rate)
         chunk = Audio.empty(1, sample_rate=self._sample_rate)
 
-        while self._webrtc_ctx.audio_receiver:
-            try:
-                audio_frames = self._webrtc_ctx.audio_receiver.get_frames(timeout=1)  # type: ignore
-                self._running = True
-            except queue.Empty:
+        if not self._webrtc_ctx.state.playing:
+            return
+
+        while True:
+            if self._webrtc_ctx.audio_receiver:
+                try:
+                    audio_frames = self._webrtc_ctx.audio_receiver.get_frames(timeout=1)  # type: ignore
+                    self._running = True
+                except queue.Empty:
+                    print("Stop stream.")
+                    self._running = False
+                    break
+
+                for audio_frame in audio_frames:
+                    chunk += Audio.from_av_frame(audio_frame).convert(1, self._sample_rate)
+
+                if chunk.duration >= self._chunk_size:
+                    buffer += chunk
+                    buffer = buffer[-self._buffer_size_samples :]
+
+                    print("Send buffer to model", buffer)
+                    text_chunk = self.process_audio(buffer)
+                    print("Received text chunk", text_chunk)
+                    self._text.append(text_chunk)
+                    self._audio += chunk
+
+                    chunk = Audio.empty(1, sample_rate=self._sample_rate)
+            else:
                 print("Stop stream.")
                 self._running = False
                 break
-
-            for audio_frame in audio_frames:
-                chunk += Audio.from_av_frame(audio_frame).convert(nchannels=1, sample_rate=self._sample_rate)
-
-            if chunk.duration >= self._chunk_size:
-                buffer += chunk
-                buffer = buffer[-self._buffer_size_samples :]
-
-                print("Send buffer to model", buffer)
-                text_chunk = self.process_audio(buffer)
-                print("Received text chunk", text_chunk)
-                self._text.append(text_chunk)
-                self._audio += chunk
-
-                chunk = Audio.empty(1, sample_rate=self._sample_rate)
 
         import time
 

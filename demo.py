@@ -27,7 +27,7 @@ def load_model():
 
 whisper_model = load_model()
 stream = StreamlitWebRtcAsrStream(
-    model=whisper_model, language=source_language, chunk_size=1, buffer_size=5, sample_rate=16000
+    model=whisper_model, language=source_language, chunk_size=1, buffer_size=2, sample_rate=16000
 )
 
 
