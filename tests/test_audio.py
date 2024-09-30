@@ -1,5 +1,6 @@
 # mypy: allow-untyped-defs
 
+import av
 import miniaudio
 import numpy as np
 import pytest
@@ -77,14 +78,38 @@ def test_from_file(audio1ch, tmp_path):
     np.testing.assert_array_equal(audio_from_file.numpy(), audio1ch.numpy())
 
 
+def test_1ch_from_av_frame(audio1ch, tmp_path):
+    file_path = str(tmp_path / "test_audio.wav")
+
+    audio1ch.wav(file_path)
+
+    av_audio = Audio.empty(1, sample_rate=audio1ch.sample_rate, sample_format=audio1ch.sample_format)
+    for frame in list(av.open(file_path).decode(audio=0)):
+        av_audio += Audio.from_av_frame(frame)
+
+    assert av_audio == audio1ch
+
+
+def test_2ch_from_av_frame(audio2ch, tmp_path):
+    file_path = str(tmp_path / "test_audio.wav")
+
+    audio2ch.wav(file_path)
+
+    av_audio = Audio.empty(2, sample_rate=audio2ch.sample_rate, sample_format=audio2ch.sample_format)
+    for frame in list(av.open(file_path).decode(audio=0)):
+        av_audio += Audio.from_av_frame(frame)
+
+    assert av_audio == audio2ch
+
+
 def test_from_numpy(audio1ch, audio1ch_32bit, audio2ch):
     audio_from_numpy = Audio.from_numpy(audio1ch.numpy())
-    audio_from_numpy_32bit = Audio.from_numpy(audio1ch_32bit.numpy())
+    audio_from_numpy_32bit = Audio.from_numpy(audio1ch_32bit.numpy(), sample_format=audio1ch_32bit.sample_format)
     audio_from_numpy_2ch = Audio.from_numpy(audio2ch.numpy(), nchannels=2)
 
-    np.testing.assert_array_equal(audio_from_numpy.numpy(), audio1ch.numpy())
-    np.testing.assert_array_equal(audio_from_numpy_32bit.numpy(), audio1ch_32bit.numpy())
-    np.testing.assert_array_equal(audio_from_numpy_2ch.numpy(), audio2ch.numpy())
+    assert audio_from_numpy == audio1ch
+    assert audio_from_numpy_32bit == audio1ch_32bit
+    assert audio_from_numpy_2ch == audio2ch
 
 
 def test_eq(audio1ch, audio1ch_32bit, audio2ch):
@@ -106,10 +131,10 @@ def test_add(audio1ch, audio2ch):
 
 
 def test_empty_add(audio1ch):
-    audio_concat = Audio.empty(nchannels=audio1ch.nchannels, sample_rate=audio1ch.sample_rate) + audio1ch
+    audio_concat = Audio.empty(audio1ch.nchannels, sample_rate=audio1ch.sample_rate) + audio1ch
 
     assert audio_concat.numpy().shape == (audio1ch.nchannels, audio1ch.num_samples)
-    np.testing.assert_array_equal(audio_concat.numpy(), audio1ch.numpy())
+    assert audio_concat == audio1ch
 
 
 def test_slice(audio1ch):
@@ -149,6 +174,13 @@ def test_convert1ch(audio1ch):
     assert audio_converted.sample_rate == 32000
     assert audio_converted.nchannels == 2
     assert audio_converted.duration == audio1ch.duration
+
+
+def test_convert_back(audio1ch):
+    audio_converted = audio1ch.convert(2, 16000)
+    audio_back = audio_converted.convert(1, 16000)
+
+    assert audio_back == audio1ch
 
 
 def test_convert2ch(audio2ch):

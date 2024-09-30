@@ -19,9 +19,15 @@ languages = ["ru", "en", "es", "fr", "de", "zh", "ja"]
 source_language = st.sidebar.selectbox("Select source language", languages)
 target_language = st.sidebar.selectbox("Select target language", languages)
 
-whisper_model = WhisperModel("openai/whisper-tiny")
+
+@st.cache_resource
+def load_model():
+    return WhisperModel("openai/whisper-base")
+
+
+whisper_model = load_model()
 stream = StreamlitWebRtcAsrStream(
-    model=whisper_model, language=source_language, chunk_size=2, overlap_size=1, buffer_size=5, sample_rate=16000
+    model=whisper_model, language=source_language, chunk_size=1, buffer_size=5, sample_rate=16000
 )
 
 

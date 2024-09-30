@@ -2,7 +2,6 @@ import queue
 from abc import ABC, abstractmethod
 from typing import Any
 
-from av.audio.resampler import AudioResampler
 from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
 from simulst.audio import Audio
@@ -11,20 +10,17 @@ from simulst.text_chunks import ConcatenatedText, TextChunk
 
 
 class AudioStream(ABC):
-    def __init__(self, chunk_size: float, overlap_size: float, buffer_size: float, sample_rate: int) -> None:
+    def __init__(self, chunk_size: float, buffer_size: float, sample_rate: int) -> None:
         """
         :param chunk_size: The size of the chunk in seconds.
-        :param overlap_size: The overlap size in seconds.
         :param buffer_size: The buffer size in seconds.
         :param sample_rate: The sample rate of the audio.
         """
         self._chunk_size = chunk_size
-        self._overlap_size = overlap_size
-        self._sample_rate = sample_rate
         self._buffer_size = buffer_size
+        self._sample_rate = sample_rate
 
         self._chunk_size_samples = int(self._chunk_size * self._sample_rate)
-        self._overlap_size_samples = int(self._overlap_size * self._sample_rate)
         self._buffer_size_samples = int(self._buffer_size * self._sample_rate)
 
         self._audio = Audio.empty(1, sample_rate=sample_rate)
@@ -74,7 +70,6 @@ class StreamlitWebRtcAsrStream(AsrStream):
             media_stream_constraints={"video": False, "audio": True},
             audio_receiver_size=512,
         )
-        self._resampler = AudioResampler(format="s16p", rate=self._sample_rate, layout="mono")
 
         self._running = False
 
@@ -92,15 +87,21 @@ class StreamlitWebRtcAsrStream(AsrStream):
                 break
 
             for audio_frame in audio_frames:
-                for frame in self._resampler.resample(audio_frame):
-                    chunk += Audio.from_av_frame(frame)
+                chunk += Audio.from_av_frame(audio_frame).convert(nchannels=1, sample_rate=self._sample_rate)
 
-            if chunk.num_samples >= self._chunk_size_samples:
+            if chunk.duration >= self._chunk_size:
                 buffer += chunk
                 buffer = buffer[-self._buffer_size_samples :]
 
+                print("Send buffer to model", buffer)
                 text_chunk = self.process_audio(buffer)
+                print("Received text chunk", text_chunk)
                 self._text.append(text_chunk)
                 self._audio += chunk
 
                 chunk = Audio.empty(1, sample_rate=self._sample_rate)
+
+        import time
+
+        if self._audio.duration > 2.0:
+            self._audio.wav(f"output {time.time()}.wav")

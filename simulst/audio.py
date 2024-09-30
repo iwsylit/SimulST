@@ -80,6 +80,9 @@ class Audio:
         :param samples: The samples to decode.
         :param kwargs: Additional arguments to pass to the miniaudio.decode function.
         """
+        if samples.shape[0] == 2:  # convert 2D array with shape (nchannels, num_samples) to packed samples
+            samples = samples.T.flatten()
+
         samples_array = array.array(_numpy_to_array_typecode(samples.dtype), samples.tobytes())
 
         return cls.from_array(samples_array, **kwargs)
@@ -87,24 +90,27 @@ class Audio:
     @classmethod
     def from_av_frame(cls, frame: av.AudioFrame) -> Self:
         format_map = {
-            "s16p": miniaudio.SampleFormat.SIGNED16,
-            "s32p": miniaudio.SampleFormat.SIGNED32,
-            "fltp": miniaudio.SampleFormat.FLOAT32,
+            "s16": miniaudio.SampleFormat.SIGNED16,
+            "s32": miniaudio.SampleFormat.SIGNED32,
+            "flt": miniaudio.SampleFormat.FLOAT32,
         }
 
         if frame.format.name not in format_map:
             raise ValueError(f"Unsupported format: {frame.format.name}")
 
+        nchannels = len(frame.layout.channels)
+        samples = frame.to_ndarray()
+
         return cls.from_numpy(
-            frame.to_ndarray(),
-            nchannels=len(frame.layout.channels),
+            samples,
+            nchannels=nchannels,
             sample_rate=frame.sample_rate,
             sample_format=format_map[frame.format.name],
         )
 
     @classmethod
     def empty(cls, num_channels: int = _NCHANNELS, **kwargs: Any) -> Self:
-        return cls.from_numpy(np.zeros([num_channels, 0], dtype=np.float32), **kwargs)
+        return cls.from_numpy(np.empty([num_channels, 0], dtype=np.float32), nchannels=num_channels, **kwargs)
 
     @classmethod
     def fake(
@@ -124,7 +130,8 @@ class Audio:
 
     def numpy(self, normalize: bool = False) -> np.ndarray:
         samples = np.array(self._audio.samples, dtype=np.float32)
-        samples = samples.reshape(self.nchannels, -1)
+        # convert packed samples to 2D array with shape (nchannels, num_samples)
+        samples = samples.reshape(-1, self.nchannels).T
 
         if normalize:
             if self._audio.sample_format not in self._NORM:

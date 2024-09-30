@@ -113,6 +113,7 @@ class WhisperModel(AsrModel):
             "no_speech_threshold": 0.6,
             "num_beams": 5,
             "temperature": 0.0,
+            "max_new_tokens": 32,
         } | generation_params
 
         super().__init__(name_or_path, generation_params)
