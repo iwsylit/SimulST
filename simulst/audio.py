@@ -98,12 +98,9 @@ class Audio:
         if frame.format.name not in format_map:
             raise ValueError(f"Unsupported format: {frame.format.name}")
 
-        nchannels = len(frame.layout.channels)
-        samples = frame.to_ndarray()
-
         return cls.from_numpy(
-            samples,
-            nchannels=nchannels,
+            frame.to_ndarray(),
+            nchannels=len(frame.layout.channels),
             sample_rate=frame.sample_rate,
             sample_format=format_map[frame.format.name],
         )

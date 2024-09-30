@@ -85,7 +85,9 @@ def test_1ch_from_av_frame(audio1ch, tmp_path):
 
     av_audio = Audio.empty(1, sample_rate=audio1ch.sample_rate, sample_format=audio1ch.sample_format)
     for frame in list(av.open(file_path).decode(audio=0)):
-        av_audio += Audio.from_av_frame(frame)
+        audio_frame = Audio.from_av_frame(frame)
+        np.testing.assert_array_equal(audio_frame.numpy(), frame.to_ndarray())
+        av_audio += audio_frame
 
     assert av_audio == audio1ch
 
@@ -97,7 +99,9 @@ def test_2ch_from_av_frame(audio2ch, tmp_path):
 
     av_audio = Audio.empty(2, sample_rate=audio2ch.sample_rate, sample_format=audio2ch.sample_format)
     for frame in list(av.open(file_path).decode(audio=0)):
-        av_audio += Audio.from_av_frame(frame)
+        audio_frame = Audio.from_av_frame(frame)
+        np.testing.assert_array_equal(audio_frame.numpy().T.flatten()[None], frame.to_ndarray())
+        av_audio += audio_frame
 
     assert av_audio == audio2ch
 
