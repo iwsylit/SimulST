@@ -6,17 +6,6 @@ import miniaudio
 import numpy as np
 
 
-def _numpy_to_array_typecode(dtype: np.dtype) -> str:
-    if dtype == np.int16:
-        return "h"
-    elif dtype == np.int32:
-        return "i"
-    elif dtype == np.float32:
-        return "f"
-    else:
-        raise ValueError(f"Unsupported dtype: {dtype}")
-
-
 class Audio:
     _SAMPLE_FORMAT = miniaudio.SampleFormat.SIGNED16
     _SAMPLE_RATE = 16000
@@ -24,8 +13,17 @@ class Audio:
 
     _NORM = {
         miniaudio.SampleFormat.SIGNED16: 1 << 15,
-        miniaudio.SampleFormat.SIGNED24: 1 << 23,
         miniaudio.SampleFormat.SIGNED32: 1 << 31,
+    }
+
+    _NUMPY_DTYPE_MAP = {
+        miniaudio.SampleFormat.SIGNED16: np.int16,
+        miniaudio.SampleFormat.SIGNED32: np.int32,
+    }
+
+    _AV_FORMAT_MAP = {
+        "s16": miniaudio.SampleFormat.SIGNED16,
+        "s32": miniaudio.SampleFormat.SIGNED32,
     }
 
     def __init__(self, audio: miniaudio.DecodedSoundFile) -> None:
@@ -75,7 +73,9 @@ class Audio:
         return cls._create(miniaudio.decode_file, filename=filename, **kwargs)
 
     @classmethod
-    def from_numpy(cls, samples: np.ndarray, **kwargs: Any) -> Self:
+    def from_numpy(
+        cls, samples: np.ndarray, sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT, **kwargs: Any
+    ) -> Self:
         """
         :param samples: The samples to decode.
         :param kwargs: Additional arguments to pass to the miniaudio.decode function.
@@ -83,26 +83,21 @@ class Audio:
         if samples.shape[0] == 2:  # convert 2D array with shape (nchannels, num_samples) to packed samples
             samples = samples.T.flatten()
 
-        samples_array = array.array(_numpy_to_array_typecode(samples.dtype), samples.tobytes())
+        samples_array = miniaudio._array_proto_from_format(sample_format)
+        samples_array.frombytes(samples.astype(cls._NUMPY_DTYPE_MAP[sample_format]).tobytes())
 
-        return cls.from_array(samples_array, **kwargs)
+        return cls.from_array(samples_array, sample_format=sample_format, **kwargs)
 
     @classmethod
     def from_av_frame(cls, frame: av.AudioFrame) -> Self:
-        format_map = {
-            "s16": miniaudio.SampleFormat.SIGNED16,
-            "s32": miniaudio.SampleFormat.SIGNED32,
-            "flt": miniaudio.SampleFormat.FLOAT32,
-        }
-
-        if frame.format.name not in format_map:
+        if frame.format.name not in cls._AV_FORMAT_MAP:
             raise ValueError(f"Unsupported format: {frame.format.name}")
 
         return cls.from_numpy(
             frame.to_ndarray(),
             nchannels=len(frame.layout.channels),
             sample_rate=frame.sample_rate,
-            sample_format=format_map[frame.format.name],
+            sample_format=cls._AV_FORMAT_MAP[frame.format.name],
         )
 
     @classmethod
@@ -126,15 +121,13 @@ class Audio:
         miniaudio.wav_write_file(filename, self._audio)
 
     def numpy(self, normalize: bool = False) -> np.ndarray:
-        samples = np.array(self._audio.samples, dtype=np.float32)
+        samples = np.array(self._audio.samples, dtype=self._NUMPY_DTYPE_MAP[self.sample_format])
         # convert packed samples to 2D array with shape (nchannels, num_samples)
         samples = samples.reshape(-1, self.nchannels).T
 
         if normalize:
-            if self._audio.sample_format not in self._NORM:
-                raise ValueError(f"Unsupported sample format: {self._audio.sample_format}")
-
-            return samples / self._NORM[self._audio.sample_format]
+            samples = samples / self._NORM[self._audio.sample_format]
+            return samples.astype(np.float32)
 
         return samples
 
