@@ -12,17 +12,17 @@ NSAMPLES = SAMPLE_RATE * 4
 
 @pytest.fixture
 def audio1ch():
-    return Audio.fake(NSAMPLES, 1, SAMPLE_RATE)
+    return Audio.fake(NSAMPLES, 1, sample_rate=SAMPLE_RATE)
 
 
 @pytest.fixture
 def audio2ch():
-    return Audio.fake(NSAMPLES, 2, SAMPLE_RATE)
+    return Audio.fake(NSAMPLES, 2, sample_rate=SAMPLE_RATE)
 
 
 @pytest.fixture
 def audio1ch_32bit():
-    return Audio.fake(NSAMPLES, 1, SAMPLE_RATE, miniaudio.SampleFormat.SIGNED32)
+    return Audio.fake(NSAMPLES, 1, sample_rate=SAMPLE_RATE, sample_format=miniaudio.SampleFormat.SIGNED32)
 
 
 @pytest.fixture
@@ -96,21 +96,28 @@ def test_eq(audio1ch, audio1ch_32bit, audio2ch):
 def test_add(audio1ch, audio2ch):
     audio_concat = audio1ch + audio1ch
 
-    assert audio_concat.numpy().shape == (NSAMPLES * 2,)
+    assert audio_concat.numpy().shape == (1, NSAMPLES * 2)
 
-    np.testing.assert_array_equal(audio_concat.numpy(), np.concatenate([audio1ch.numpy(), audio1ch.numpy()]))
+    np.testing.assert_array_equal(audio_concat.numpy(), np.concatenate([audio1ch.numpy(), audio1ch.numpy()], axis=1))
 
     audio_concat._check_properties_equality(audio1ch)
     with pytest.raises(ValueError):
         audio1ch + audio2ch
 
 
+def test_empty_add(audio1ch):
+    audio_concat = Audio.empty(nchannels=audio1ch.nchannels, sample_rate=audio1ch.sample_rate) + audio1ch
+
+    assert audio_concat.numpy().shape == (audio1ch.nchannels, audio1ch.num_samples)
+    np.testing.assert_array_equal(audio_concat.numpy(), audio1ch.numpy())
+
+
 def test_slice(audio1ch):
     audio_slice = audio1ch[1000:2000]
 
-    assert audio_slice.numpy().shape == (1000,)
+    assert audio_slice.numpy().shape == (1, 1000)
     audio_slice._check_properties_equality(audio1ch)
-    np.testing.assert_array_equal(audio_slice.numpy(), audio1ch.numpy()[1000:2000])
+    np.testing.assert_array_equal(audio_slice.numpy(), audio1ch.numpy()[..., 1000:2000])
 
 
 def test_slice_2ch(audio2ch):
@@ -127,6 +134,30 @@ def test_normalization(audio1ch):
 
 def test_normalization_32bit(audio1ch_32bit):
     assert audio1ch_32bit.numpy(normalize=True).mean() == pytest.approx(0.0, abs=1e-2)
+
+
+def test_convert_no_change(audio1ch):
+    audio_converted = audio1ch.convert(audio1ch.nchannels, audio1ch.sample_rate)
+
+    assert audio_converted == audio1ch
+
+
+def test_convert1ch(audio1ch):
+    audio_converted = audio1ch.convert(2, 32000)
+
+    assert audio_converted.numpy().shape == (2, NSAMPLES * 2)
+    assert audio_converted.sample_rate == 32000
+    assert audio_converted.nchannels == 2
+    assert audio_converted.duration == audio1ch.duration
+
+
+def test_convert2ch(audio2ch):
+    audio_converted = audio2ch.convert(1, 8000)
+
+    assert audio_converted.num_samples == pytest.approx(NSAMPLES // 2, abs=2)
+    assert audio_converted.sample_rate == 8000
+    assert audio_converted.nchannels == 1
+    assert audio_converted.duration == pytest.approx(audio2ch.duration, abs=0.01)
 
 
 def test_batch_len(audio_batch):

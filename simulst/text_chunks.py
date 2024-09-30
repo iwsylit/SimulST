@@ -50,6 +50,10 @@ class TextChunks:
     def __init__(self, chunks: Sequence[TextChunk]) -> None:
         self._chunks = list(chunks)
 
+    @classmethod
+    def empty(cls) -> Self:
+        return cls([])
+
     def append(self, chunk: TextChunk) -> None:
         self._chunks.append(chunk)
 
@@ -70,8 +74,10 @@ class ConcatenatedText(TextChunks):
 
     def __init__(self, chunks: Sequence[TextChunk]) -> None:
         super().__init__(chunks)
-
-        self._concatenated_chunks = self._concatenate(self._chunks)
+        if len(self._chunks) > 0:
+            self._concatenated_chunks = self._concatenate(self._chunks)
+        else:
+            self._concatenated_chunks = TextChunk("")
 
     def append(self, chunk: TextChunk) -> None:
         super().append(chunk)

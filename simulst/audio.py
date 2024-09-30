@@ -1,6 +1,7 @@
 import array
 from typing import Any, Callable, Iterator, Self, Sequence
 
+import av
 import miniaudio
 import numpy as np
 
@@ -44,6 +45,20 @@ class Audio:
         return cls(audio)
 
     @classmethod
+    def from_array(cls, samples: array.array, **kwargs: Any) -> Self:
+        """
+        :param samples: The samples to decode.
+        :param kwargs: Additional arguments to pass to the miniaudio.decode function.
+        """
+
+        def factory_method(samples: array.array, **kwargs: Any) -> miniaudio.DecodedSoundFile:
+            kwargs["sample_format"] = kwargs.pop("output_format")
+
+            return miniaudio.DecodedSoundFile(name="", samples=samples, **kwargs)
+
+        return cls._create(factory_method, samples=samples, **kwargs)
+
+    @classmethod
     def from_bytes(cls, bytes: bytes, **kwargs: Any) -> Self:
         """
         :param bytes: The bytes to decode.
@@ -60,51 +75,56 @@ class Audio:
         return cls._create(miniaudio.decode_file, filename=filename, **kwargs)
 
     @classmethod
-    def from_numpy(
-        cls,
-        samples: np.ndarray,
-        nchannels: int = _NCHANNELS,
-        sample_rate: int = _SAMPLE_RATE,
-        sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
-    ) -> Self:
-        audio = miniaudio.DecodedSoundFile(
-            name="",
-            nchannels=nchannels,
-            sample_rate=sample_rate,
-            sample_format=sample_format,
-            samples=array.array(_numpy_to_array_typecode(samples.dtype), samples.tobytes()),
+    def from_numpy(cls, samples: np.ndarray, **kwargs: Any) -> Self:
+        """
+        :param samples: The samples to decode.
+        :param kwargs: Additional arguments to pass to the miniaudio.decode function.
+        """
+        samples_array = array.array(_numpy_to_array_typecode(samples.dtype), samples.tobytes())
+
+        return cls.from_array(samples_array, **kwargs)
+
+    @classmethod
+    def from_av_frame(cls, frame: av.AudioFrame) -> Self:
+        format_map = {
+            "s16p": miniaudio.SampleFormat.SIGNED16,
+            "s32p": miniaudio.SampleFormat.SIGNED32,
+            "fltp": miniaudio.SampleFormat.FLOAT32,
+        }
+
+        if frame.format.name not in format_map:
+            raise ValueError(f"Unsupported format: {frame.format.name}")
+
+        return cls.from_numpy(
+            frame.to_ndarray(),
+            nchannels=len(frame.layout.channels),
+            sample_rate=frame.sample_rate,
+            sample_format=format_map[frame.format.name],
         )
 
-        return cls(audio)
+    @classmethod
+    def empty(cls, num_channels: int = _NCHANNELS, **kwargs: Any) -> Self:
+        return cls.from_numpy(np.zeros([num_channels, 0], dtype=np.float32), **kwargs)
 
     @classmethod
     def fake(
         cls,
         nsamples: int = 1000,
         nchannels: int = _NCHANNELS,
-        sample_rate: int = _SAMPLE_RATE,
         sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
+        **kwargs: Any,
     ) -> Self:
         samples = miniaudio._array_proto_from_format(sample_format)
         samples.frombytes(np.random.randint(0, 100, nsamples * nchannels, dtype=np.int16).tobytes())
 
-        audio = miniaudio.DecodedSoundFile(
-            name="",
-            nchannels=nchannels,
-            sample_rate=sample_rate,
-            samples=samples,
-            sample_format=sample_format,
-        )
-
-        return cls(audio)
+        return cls.from_array(samples, nchannels=nchannels, sample_format=sample_format, **kwargs)
 
     def wav(self, filename: str) -> None:
         miniaudio.wav_write_file(filename, self._audio)
 
     def numpy(self, normalize: bool = False) -> np.ndarray:
         samples = np.array(self._audio.samples, dtype=np.float32)
-        if self.nchannels > 1:
-            samples = samples.reshape(self.nchannels, -1)
+        samples = samples.reshape(self.nchannels, -1)
 
         if normalize:
             if self._audio.sample_format not in self._NORM:
@@ -113,6 +133,27 @@ class Audio:
             return samples / self._NORM[self._audio.sample_format]
 
         return samples
+
+    def convert(
+        self,
+        nchannels: int = _NCHANNELS,
+        sample_rate: int = _SAMPLE_RATE,
+        sample_format: miniaudio.SampleFormat = _SAMPLE_FORMAT,
+    ) -> Self:
+        converted_frames = miniaudio.convert_frames(
+            from_fmt=self._audio.sample_format,
+            from_numchannels=self._audio.nchannels,
+            from_samplerate=self._audio.sample_rate,
+            sourcedata=miniaudio.ffi.from_buffer(self._audio.samples),
+            to_fmt=sample_format,
+            to_numchannels=nchannels,
+            to_samplerate=sample_rate,
+        )
+
+        samples = miniaudio._array_proto_from_format(sample_format)
+        samples.frombytes(converted_frames)
+
+        return self.from_array(samples, nchannels=nchannels, sample_rate=sample_rate, sample_format=sample_format)
 
     def _equal_properties(self, other: Self) -> bool:
         return (
@@ -162,7 +203,7 @@ class Audio:
         self._check_properties_equality(other)
 
         return Audio.from_numpy(
-            np.concatenate([self.numpy(), other.numpy()]),
+            np.concatenate([self.numpy(), other.numpy()], axis=1),
             nchannels=self.nchannels,
             sample_rate=self.sample_rate,
             sample_format=self._audio.sample_format,
