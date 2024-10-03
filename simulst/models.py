@@ -56,9 +56,7 @@ class BaseModel(ABC, nn.Module):
 
 class AsrModel(BaseModel):
     @abstractmethod
-    def _generate(
-        self, audio: Audio | AudioBatch, language: str, prev_transcript: SpeechTranscription | None = None
-    ) -> list[str]:
+    def _generate(self, audio: Audio | AudioBatch, language: str, prev_transcript: str | None = None) -> list[str]:
         pass
 
     def transcribe_batch(self, audios: AudioBatch, language: str) -> SpeechTranscriptionBatch:
@@ -70,9 +68,7 @@ class AsrModel(BaseModel):
             [SpeechTranscription(audio, transcription) for audio, transcription in zip(audios, transcriptions)]
         )
 
-    def transcribe(
-        self, audio: Audio, language: str, prev_transcript: SpeechTranscription | None = None
-    ) -> SpeechTranscription:
+    def transcribe(self, audio: Audio, language: str, prev_transcript: str | None = None) -> SpeechTranscription:
         self._check_supported_languages(language, None)
 
         transcription = self._generate(audio, language, prev_transcript)[0]
@@ -144,12 +140,10 @@ class WhisperModel(AsrModel):
         return WhisperProcessor.from_pretrained(self._name_or_path)
 
     @torch.inference_mode()
-    def _generate(
-        self, audio: Audio | AudioBatch, language: str, prev_transcript: SpeechTranscription | None = None
-    ) -> list[str]:
+    def _generate(self, audio: Audio | AudioBatch, language: str, prev_transcript: str | None = None) -> list[str]:
         # fmt: off
         input_features = self._processor(audio.numpy(normalize=True), sampling_rate=audio.sample_rate, return_tensors="pt")  # noqa: E501
-        prompt_ids = self._processor.get_prompt_ids(prev_transcript.target, return_tensors="pt") if prev_transcript else None  # noqa: E501
+        prompt_ids = self._processor.get_prompt_ids(prev_transcript, return_tensors="pt") if prev_transcript else None  # noqa: E501
 
         forced_decoder_ids = self._processor.get_decoder_prompt_ids(language=language, task="transcribe")
         # fmt: on

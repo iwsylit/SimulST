@@ -67,6 +67,9 @@ class TextChunks:
     def __len__(self) -> int:
         return len(self._chunks)
 
+    def __getitem__(self, index: int | slice) -> TextChunk | list[TextChunk]:
+        return self.chunks[index]
+
 
 class ConcatenatedText(TextChunks):
     _CLEAN_END_REGEX = re.compile(r"[^\w]+$")

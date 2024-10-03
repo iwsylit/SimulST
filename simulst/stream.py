@@ -7,6 +7,7 @@ from streamlit_webrtc import WebRtcMode, webrtc_streamer
 from simulst.audio import Audio
 from simulst.models import AsrModel
 from simulst.text_chunks import ConcatenatedText, TextChunk
+from simulst.translation import SpeechTranscription
 
 
 class AudioStream(ABC):
@@ -28,7 +29,7 @@ class AudioStream(ABC):
         self._running = False
 
     @abstractmethod
-    def process_audio(self, audio: Audio) -> TextChunk:
+    def process_audio(self, audio: Audio) -> SpeechTranscription:
         pass
 
     @abstractmethod
@@ -56,8 +57,8 @@ class AsrStream(AudioStream):
         self._model = model
         self._language = language
 
-    def process_audio(self, audio: Audio) -> TextChunk:
-        return TextChunk.from_translation(self._model.transcribe(audio, language=self._language))  # type: ignore
+    def process_audio(self, audio: Audio) -> SpeechTranscription:
+        return self._model.transcribe(audio, language=self._language, prev_transcript=self._text.text[-200:])
 
 
 class StreamlitWebRtcAsrStream(AsrStream):
@@ -75,7 +76,7 @@ class StreamlitWebRtcAsrStream(AsrStream):
 
     def run(self) -> None:
         buffer = Audio.empty(1, sample_rate=self._sample_rate)
-        chunk = Audio.empty(1, sample_rate=self._sample_rate)
+        chunk = Audio.empty(2, sample_rate=48000)
 
         if not self._webrtc_ctx.state.playing:
             return
@@ -83,7 +84,7 @@ class StreamlitWebRtcAsrStream(AsrStream):
         while True:
             if self._webrtc_ctx.audio_receiver:
                 try:
-                    audio_frames = self._webrtc_ctx.audio_receiver.get_frames(timeout=1)  # type: ignore
+                    audio_frames = self._webrtc_ctx.audio_receiver.get_frames(timeout=1)
                     self._running = True
                 except queue.Empty:
                     print("Stop stream.")
@@ -91,19 +92,26 @@ class StreamlitWebRtcAsrStream(AsrStream):
                     break
 
                 for audio_frame in audio_frames:
-                    chunk += Audio.from_av_frame(audio_frame).convert(1, self._sample_rate)
+                    chunk += Audio.from_av_frame(audio_frame)
 
                 if chunk.duration >= self._chunk_size:
+                    chunk = chunk.convert(1, self._sample_rate)
+
                     buffer += chunk
+                    if buffer.duration < 3:
+                        chunk = Audio.empty(2, sample_rate=48000)
+                        continue
+
                     buffer = buffer[-self._buffer_size_samples :]
 
-                    print("Send buffer to model", buffer)
+                    # print("Send buffer to model", buffer)
                     text_chunk = self.process_audio(buffer)
+                    self._text.append(TextChunk.from_translation(text_chunk))  # type: ignore
                     print("Received text chunk", text_chunk)
-                    self._text.append(text_chunk)
+                    print("Text", self._text.text)
                     self._audio += chunk
 
-                    chunk = Audio.empty(1, sample_rate=self._sample_rate)
+                    chunk = Audio.empty(2, sample_rate=48000)
             else:
                 print("Stop stream.")
                 self._running = False
