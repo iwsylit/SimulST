@@ -1,4 +1,6 @@
+av==13.1.0
 miniaudio==1.61
 numpy==2.1.0
+streamlit==1.40.0
 torch==2.5.1
 transformers==4.46.2
