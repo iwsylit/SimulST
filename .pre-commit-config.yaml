@@ -1,8 +1,8 @@
 minimum_pre_commit_version: 2.18.0
 default_language_version:
-    python: python3.11
+    python: python3.12
 default_install_hook_types: ['pre-commit', 'pre-push']
-default_stages: [commit]
+default_stages: [pre-commit]
 repos:
   - repo: https://github.com/psf/black
     rev: 24.8.0
@@ -29,12 +29,12 @@ repos:
     hooks:
       - id: check-added-large-files
         args: ['--maxkb=1024']
-        stages: [commit]
+        stages: [pre-commit]
       - id: check-docstring-first
       - id: check-yaml
       - id: debug-statements
       - id: end-of-file-fixer
-        stages: [commit]
+        stages: [pre-commit]
       - id: requirements-txt-fixer
       - id: trailing-whitespace
-        stages: [commit]
+        stages: [pre-commit]
