@@ -116,6 +116,12 @@ def test_from_numpy(audio1ch, audio1ch_32bit, audio2ch):
     assert audio_from_numpy_2ch == audio2ch
 
 
+def test_from_list(audio1ch):
+    audio_from_list = Audio.from_list(audio1ch.list())
+
+    assert audio_from_list == audio1ch
+
+
 def test_eq(audio1ch, audio1ch_32bit, audio2ch):
     assert audio1ch == audio1ch
     assert audio1ch != audio2ch

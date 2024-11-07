@@ -1,15 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Self
 
-import torch
+import whisper
 from torch import nn
-from transformers import WhisperForConditionalGeneration, WhisperProcessor
 from transformers.models.whisper.tokenization_whisper import LANGUAGES as whisper_langs
 
 from simulst.audio import Audio, AudioBatch
 from simulst.translation import (
-    SpeechTranscription,
-    SpeechTranscriptionBatch,
     SpeechTranslation,
     SpeechTranslationBatch,
     TextTranslation,
@@ -35,7 +31,7 @@ class BaseModel(ABC, nn.Module):
         pass
 
     @abstractmethod
-    def _load_processor(self) -> nn.Module:
+    def _load_processor(self) -> nn.Module | None:
         pass
 
     def _check_supported_languages(self, source_lang: str | None, target_lang: str | None) -> None:
@@ -54,105 +50,63 @@ class BaseModel(ABC, nn.Module):
         return self._generation_params
 
 
-class AsrModel(BaseModel):
+class SpeechToTextModel(BaseModel):
     @abstractmethod
-    def _generate(self, audio: Audio | AudioBatch, language: str, prev_transcript: str | None = None) -> list[str]:
+    def _generate(
+        self, audio: Audio | AudioBatch, language: str, previous_translation: str | None = None
+    ) -> list[str]:
         pass
 
-    def transcribe_batch(self, audios: AudioBatch, language: str) -> SpeechTranscriptionBatch:
+    def translate_batch(self, audios: AudioBatch, language: str) -> SpeechTranslationBatch:
         self._check_supported_languages(language, None)
 
         transcriptions = self._generate(audios, language)
 
-        return SpeechTranscriptionBatch(
-            [SpeechTranscription(audio, transcription) for audio, transcription in zip(audios, transcriptions)]
+        return SpeechTranslationBatch(
+            [
+                SpeechTranslation(audio, transcription, language, language)
+                for audio, transcription in zip(audios, transcriptions)
+            ]
         )
 
-    def transcribe(self, audio: Audio, language: str, prev_transcript: str | None = None) -> SpeechTranscription:
+    def translate(self, audio: Audio, language: str, previous_translation: str | None = None) -> SpeechTranslation:
         self._check_supported_languages(language, None)
 
-        transcription = self._generate(audio, language, prev_transcript)[0]
+        transcription = self._generate(audio, language, previous_translation)[0]
 
-        return SpeechTranscription(audio, transcription)
+        return SpeechTranslation(audio, transcription, language, language)
 
 
-class TranslationModel(BaseModel):
+class TextToTextModel(BaseModel):
     @abstractmethod
-    def translate_batch(
-        self, texts: SpeechTranscriptionBatch, source_lang: str, target_lang: str
-    ) -> TextTranslationBatch:
+    def translate_batch(self, texts: TextTranslationBatch, source_lang: str, target_lang: str) -> TextTranslationBatch:
         pass
 
-    def translate(self, text: SpeechTranscription, source_lang: str, target_lang: str) -> TextTranslation:
-        return self.translate_batch(SpeechTranscriptionBatch([text]), source_lang, target_lang)[0]
+    def translate(self, text: SpeechTranslation, source_lang: str, target_lang: str) -> TextTranslation:
+        return self.translate_batch(SpeechTranslationBatch([text]), source_lang, target_lang)[0]
 
 
-class E2EModel(BaseModel):
-    @abstractmethod
-    def translate_batch(self, audios: AudioBatch, source_lang: str, target_lang: str) -> SpeechTranslationBatch:
-        pass
-
-    def translate(self, audio: Audio, source_lang: str, target_lang: str) -> SpeechTranslation:
-        return self.translate_batch(AudioBatch([audio]), source_lang, target_lang)[0]
-
-
-class WhisperModel(AsrModel):
+class WhisperModel(SpeechToTextModel):
     _SUPPORTED_SOURCE_LANGUAGES = set(whisper_langs.keys())
-    _SUPPORTED_TARGET_LANGUAGES = {"en"}
-
-    def __init__(self, name_or_path: str = "openai/whisper-base", generation_params: dict = {}) -> None:
-        self._generation_params = {
-            "prompt_condition_type": "all-segments",
-            "condition_on_prev_tokens": True,
-            "compression_ratio_threshold": 1.35,
-            "logprob_threshold": -1.0,
-            "no_speech_threshold": 0.6,
-            "num_beams": 5,
-            "temperature": 0.0,
-            "max_new_tokens": 32,
-        } | generation_params
-
-        super().__init__(name_or_path, generation_params)
-
-    @classmethod
-    def fake(cls, generation_params: dict = {}) -> Self:
-        class FakeWhisperModel(cls):  # type: ignore
-            def _load_model(self) -> nn.Module:
-                return nn.Linear(1, 1)
-
-            def _load_processor(self) -> nn.Module:
-                return nn.Linear(1, 1)
-
-            def _generate(
-                self, audio: Audio | AudioBatch, language: str, prev_transcript: SpeechTranscription | None = None
-            ) -> list[str]:
-                if isinstance(audio, Audio):
-                    return ["fake"]
-                else:
-                    return ["fake" for _ in audio]
-
-        return FakeWhisperModel("", generation_params)
 
     def _load_model(self) -> nn.Module:
-        return WhisperForConditionalGeneration.from_pretrained(self._name_or_path)
+        return whisper.load_model(self._name_or_path)
 
     def _load_processor(self) -> nn.Module:
-        return WhisperProcessor.from_pretrained(self._name_or_path)
+        return None
 
-    @torch.inference_mode()
-    def _generate(self, audio: Audio | AudioBatch, language: str, prev_transcript: str | None = None) -> list[str]:
-        # fmt: off
-        input_features = self._processor(audio.numpy(normalize=True), sampling_rate=audio.sample_rate, return_tensors="pt")  # noqa: E501
-        prompt_ids = self._processor.get_prompt_ids(prev_transcript, return_tensors="pt") if prev_transcript else None  # noqa: E501
-
-        forced_decoder_ids = self._processor.get_decoder_prompt_ids(language=language, task="transcribe")
-        # fmt: on
-
-        predicted_ids = self._model.generate(
-            input_features.input_features,
-            forced_decoder_ids=forced_decoder_ids,
-            prompt_ids=prompt_ids,
-            **self._generation_params,
+    def _generate(
+        self, audio: Audio | AudioBatch, language: str, previous_translation: str | None = None
+    ) -> list[str]:
+        options = whisper.DecodingOptions(
+            prefix=previous_translation,
+            language=language,
+            without_timestamps=True,
+            fp16=False,
         )
 
-        return list(map(str.strip, self._processor.batch_decode(predicted_ids, skip_special_tokens=True)))
+        audio = whisper.pad_or_trim(audio.numpy(normalize=True).squeeze())
+        mel = whisper.log_mel_spectrogram(audio).to(self._model.device)
+        output = self._model.decode(mel, options)
+
+        return [output.text]

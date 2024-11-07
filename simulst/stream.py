@@ -2,11 +2,11 @@ import queue
 from abc import ABC, abstractmethod
 from typing import Any
 
+from simuleval.data.segments import SpeechSegment
 from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
 from simulst.audio import Audio
 from simulst.models import AsrModel
-from simulst.text_chunks import ConcatenatedText, TextChunk
 from simulst.translation import SpeechTranscription
 
 
@@ -25,7 +25,7 @@ class AudioStream(ABC):
         self._buffer_size_samples = int(self._buffer_size * self._sample_rate)
 
         self._audio = Audio.empty(1, sample_rate=sample_rate)
-        self._text = ConcatenatedText.empty()
+        self._text = ""
         self._running = False
 
     @abstractmethod
@@ -38,7 +38,7 @@ class AudioStream(ABC):
 
     @property
     def text(self) -> str:
-        return self._text.text
+        return self._text
 
     @property
     def running(self) -> bool:
@@ -56,9 +56,18 @@ class AsrStream(AudioStream):
 
         self._model = model
         self._language = language
+        self._states = self._model.build_states()
 
     def process_audio(self, audio: Audio) -> SpeechTranscription:
-        return self._model.transcribe(audio, language=self._language, prev_transcript=self._text.text[-200:])
+        segment = SpeechSegment(
+            content=audio.numpy(normalize=True).squeeze().tolist(), sample_rate=audio.sample_rate, finished=False
+        )
+        output = self._model.pushpop(segment, states=self._states)
+        self._states.source_finished = False
+
+        self._states.target.append(output.content)
+
+        return output.content
 
 
 class StreamlitWebRtcAsrStream(AsrStream):
@@ -75,7 +84,6 @@ class StreamlitWebRtcAsrStream(AsrStream):
         self._running = False
 
     def run(self) -> None:
-        buffer = Audio.empty(1, sample_rate=self._sample_rate)
         chunk = Audio.empty(2, sample_rate=48000)
 
         if not self._webrtc_ctx.state.playing:
@@ -97,18 +105,11 @@ class StreamlitWebRtcAsrStream(AsrStream):
                 if chunk.duration >= self._chunk_size:
                     chunk = chunk.convert(1, self._sample_rate)
 
-                    buffer += chunk
-                    if buffer.duration < 3:
-                        chunk = Audio.empty(2, sample_rate=48000)
-                        continue
-
-                    buffer = buffer[-self._buffer_size_samples :]
-
-                    # print("Send buffer to model", buffer)
-                    text_chunk = self.process_audio(buffer)
-                    self._text.append(TextChunk.from_translation(text_chunk))  # type: ignore
+                    print("Send buffer to model", chunk)
+                    text_chunk = self.process_audio(chunk)
                     print("Received text chunk", text_chunk)
-                    print("Text", self._text.text)
+                    self._text += " " + text_chunk
+                    print("Text", self._text)
                     self._audio += chunk
 
                     chunk = Audio.empty(2, sample_rate=48000)
@@ -117,7 +118,7 @@ class StreamlitWebRtcAsrStream(AsrStream):
                 self._running = False
                 break
 
-        import time
+        import datetime
 
         if self._audio.duration > 2.0:
-            self._audio.wav(f"output {time.time()}.wav")
+            self._audio.wav(f"output {datetime.datetime.now().isoformat()}.wav")

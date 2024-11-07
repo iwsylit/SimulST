@@ -1,4 +1,6 @@
 miniaudio==1.61
-numpy==2.1.0
+numpy==2.0.2
+simuleval==1.1.4
 torch==2.4.0
 transformers==4.44.2
+whisper==1.1.10
