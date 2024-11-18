@@ -1,16 +1,20 @@
+import datetime
 import queue
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any
 
 from simuleval.data.segments import SpeechSegment
 from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
 from simulst.audio import Audio
-from simulst.models import AsrModel
+from simulst.models import SpeechToTextModel
 from simulst.translation import SpeechTranscription
 
 
 class AudioStream(ABC):
+    TMP_DIR = Path("data/outputs")
+
     def __init__(self, chunk_size: float, buffer_size: float, sample_rate: int) -> None:
         """
         :param chunk_size: The size of the chunk in seconds.
@@ -36,6 +40,16 @@ class AudioStream(ABC):
     def run(self) -> None:
         pass
 
+    def write_result(self) -> None:
+        out_dir = self.TMP_DIR / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        if self._audio.duration > 2.0:
+            self._audio.wav(str(out_dir / "audio.wav"))
+
+            with open(out_dir / "text.txt", "w") as f:
+                f.write(self._text)
+
     @property
     def text(self) -> str:
         return self._text
@@ -48,7 +62,7 @@ class AudioStream(ABC):
 class AsrStream(AudioStream):
     def __init__(
         self,
-        model: AsrModel,
+        model: SpeechToTextModel,
         language: str,
         **kwargs: Any,
     ) -> None:
@@ -60,12 +74,10 @@ class AsrStream(AudioStream):
 
     def process_audio(self, audio: Audio) -> SpeechTranscription:
         segment = SpeechSegment(
-            content=audio.numpy(normalize=True).squeeze().tolist(), sample_rate=audio.sample_rate, finished=False
+            content=audio.numpy().squeeze().tolist(), sample_rate=audio.sample_rate, finished=False
         )
         output = self._model.pushpop(segment, states=self._states)
         self._states.source_finished = False
-
-        self._states.target.append(output.content)
 
         return output.content
 
@@ -118,7 +130,4 @@ class StreamlitWebRtcAsrStream(AsrStream):
                 self._running = False
                 break
 
-        import datetime
-
-        if self._audio.duration > 2.0:
-            self._audio.wav(f"output {datetime.datetime.now().isoformat()}.wav")
+        self.write_result()
