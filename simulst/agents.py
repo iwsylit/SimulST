@@ -43,7 +43,9 @@ class WaitkWhisperAgent(SpeechToTextAgent):
             "--continuous-write",
             default=1,
             type=int,
-            help="Max number of words to write at each step",
+            help="""Max number of words to write at each step.
+            Use negative values to write all words except N end words.
+            If the prediction is longer than 15 words, only the first word is written.""",
         )
         parser.add_argument(
             "--task",
@@ -65,7 +67,10 @@ class WaitkWhisperAgent(SpeechToTextAgent):
             prediction = prediction.target.split()
 
             if not states.source_finished:
-                prediction = prediction[: self.continuous_write]
+                if len(prediction) >= 15:
+                    prediction = prediction[:1]
+                else:
+                    prediction = prediction[: self.continuous_write]
 
             return WriteAction(
                 content=" ".join(prediction),
