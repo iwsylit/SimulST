@@ -54,11 +54,13 @@ def print_text():
                 f.write(stream.text)
 
             text_output.markdown(stream.text)
+            stream_duration.markdown(f"Stream duration: {stream.stream_duration:.0f} s")
 
         time.sleep(0.2)
 
 
 st.markdown("## Transcript")
+stream_duration = st.empty()
 text_output = st.empty()
 
 print_button = st.sidebar.button("Print")

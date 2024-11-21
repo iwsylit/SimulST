@@ -58,6 +58,14 @@ class AudioStream(ABC):
     def running(self) -> bool:
         return self._running
 
+    @property
+    def audio(self) -> Audio:
+        return self._audio
+
+    @property
+    def stream_duration(self) -> float:
+        return self._audio.duration
+
 
 class AsrStream(AudioStream):
     def __init__(
