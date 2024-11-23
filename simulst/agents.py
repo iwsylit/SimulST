@@ -64,16 +64,16 @@ class WaitkWhisperAgent(SpeechToTextAgent):
             prediction = self._model.translate(
                 Audio.from_list(states.source), self.source_language, self.target_language, previous_translation
             )
-            prediction = prediction.target.split()
+            predicted_words = prediction.target.split()
 
             if not states.source_finished:
-                if len(prediction) >= 15:
-                    prediction = prediction[:1]
+                if len(predicted_words) >= 15:
+                    predicted_words = predicted_words[:1]
                 else:
-                    prediction = prediction[: self.continuous_write]
+                    predicted_words = predicted_words[: self.continuous_write]
 
             return WriteAction(
-                content=" ".join(prediction),
+                content=" ".join(predicted_words),
                 finished=states.source_finished,
             )
         else:
