@@ -74,15 +74,15 @@ class TextToTextModel(BaseModel):
     def translate_batch(self, texts: TextTranslationBatch, source_lang: str, target_lang: str) -> TextTranslationBatch:
         pass
 
-    def translate(self, text: SpeechTranslation, source_lang: str, target_lang: str) -> TextTranslation:
-        return self.translate_batch(SpeechTranslationBatch([text]), source_lang, target_lang)[0]
+    def translate(self, text: TextTranslation, source_lang: str, target_lang: str) -> TextTranslation:
+        return self.translate_batch(TextTranslationBatch([text]), source_lang, target_lang)[0]
 
 
 class WhisperModel(SpeechToTextModel):
     def _load_model(self) -> nn.Module:
         return whisper.load_model(self._name_or_path, device="cuda")
 
-    def _load_processor(self) -> nn.Module:
+    def _load_processor(self) -> nn.Module | None:
         return None
 
     def _generate(
@@ -92,6 +92,9 @@ class WhisperModel(SpeechToTextModel):
         target_language: str,
         previous_translation: str | None = None,
     ) -> list[str]:
+        if isinstance(audio, AudioBatch):
+            raise NotImplementedError("Batch generation is not supported at the moment")
+
         options = whisper.DecodingOptions(
             prefix=previous_translation,
             language=target_language,
@@ -99,8 +102,8 @@ class WhisperModel(SpeechToTextModel):
             fp16=False,
         )
 
-        audio = whisper.pad_or_trim(audio.numpy(normalize=True).squeeze())
-        mel = whisper.log_mel_spectrogram(audio, n_mels=self._model.dims.n_mels).to(self._model.device)
+        audio = whisper.pad_or_trim(audio.numpy(normalize=True).squeeze())  # type: ignore
+        mel = whisper.log_mel_spectrogram(audio, n_mels=self._model.dims.n_mels).to(self._model.device)  # type: ignore
         output = self._model.decode(mel, options)
 
         return [output.text]

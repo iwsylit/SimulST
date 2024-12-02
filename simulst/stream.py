@@ -9,7 +9,6 @@ from streamlit_webrtc import WebRtcMode, webrtc_streamer
 
 from simulst.audio import Audio
 from simulst.models import SpeechToTextModel
-from simulst.translation import SpeechTranscription
 
 
 class AudioStream(ABC):
@@ -33,7 +32,7 @@ class AudioStream(ABC):
         self._running = False
 
     @abstractmethod
-    def process_audio(self, audio: Audio) -> SpeechTranscription:
+    def process_audio(self, audio: Audio) -> str:
         pass
 
     @abstractmethod
@@ -80,7 +79,7 @@ class AsrStream(AudioStream):
         self._language = language
         self._states = self._model.build_states()
 
-    def process_audio(self, audio: Audio) -> SpeechTranscription:
+    def process_audio(self, audio: Audio) -> str:
         segment = SpeechSegment(
             content=audio.numpy().squeeze().tolist(), sample_rate=audio.sample_rate, finished=False
         )
