@@ -14,18 +14,15 @@ from simulst.models import SpeechToTextModel
 class AudioStream(ABC):
     TMP_DIR = Path("data/outputs")
 
-    def __init__(self, chunk_size: float, buffer_size: float, sample_rate: int) -> None:
+    def __init__(self, chunk_size: float, sample_rate: int) -> None:
         """
         :param chunk_size: The size of the chunk in seconds.
-        :param buffer_size: The buffer size in seconds.
         :param sample_rate: The sample rate of the audio.
         """
         self._chunk_size = chunk_size
-        self._buffer_size = buffer_size
         self._sample_rate = sample_rate
 
         self._chunk_size_samples = int(self._chunk_size * self._sample_rate)
-        self._buffer_size_samples = int(self._buffer_size * self._sample_rate)
 
         self._audio = Audio.empty(1, sample_rate=sample_rate)
         self._text = ""
@@ -39,7 +36,13 @@ class AudioStream(ABC):
     def run(self) -> None:
         pass
 
-    def write_result(self) -> None:
+    def _on_stop(self) -> None:
+        self._write_result()
+
+        self._running = False
+        self._text = ""
+
+    def _write_result(self) -> None:
         out_dir = self.TMP_DIR / datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -88,6 +91,11 @@ class AsrStream(AudioStream):
 
         return output.content
 
+    def _on_stop(self) -> None:
+        super()._on_stop()
+
+        self._states = self._model.build_states()
+
 
 class StreamlitWebRtcAsrStream(AsrStream):
     def __init__(self, **kwargs: Any) -> None:
@@ -123,8 +131,8 @@ class StreamlitWebRtcAsrStream(AsrStream):
 
                 if chunk.duration >= self._chunk_size:
                     chunk = chunk.convert(1, self._sample_rate)
-
-                    print("Send buffer to model", chunk)
+                    # TODO: use proper logging
+                    print("Send chunk to model", chunk)
                     text_chunk = self.process_audio(chunk)
                     print("Received text chunk", text_chunk)
                     self._text += " " + text_chunk
@@ -134,7 +142,6 @@ class StreamlitWebRtcAsrStream(AsrStream):
                     chunk = Audio.empty(2, sample_rate=48000)
             else:
                 print("Stop stream.")
-                self._running = False
                 break
 
-        self.write_result()
+        self._on_stop()

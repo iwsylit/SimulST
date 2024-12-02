@@ -42,7 +42,6 @@ stream = StreamlitWebRtcAsrStream(
     model=load_model(source_language, target_language),
     language=source_language,
     chunk_size=1,
-    buffer_size=1,
     sample_rate=16000,
 )
 

@@ -59,7 +59,8 @@ class WaitkWhisperAgent(SpeechToTextAgent):
             states = self.states
 
         if self._policy(states):
-            previous_translation = " ".join(states.target).replace(" ,", ",").replace(" .", ".")
+            previous_translation = " ".join(states.target)
+            previous_translation = previous_translation.replace(" ,", ",").replace(" .", ".")
             # TODO: fix audio saved in states to be np array instead of list
             prediction = self._model.translate(
                 Audio.from_list(states.source), self.source_language, self.target_language, previous_translation
