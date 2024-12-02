@@ -31,7 +31,7 @@ def load_model(source_language, target_language):
             "source_segment_size": 100,
             "source_language": source_language,
             "target_language": target_language,
-            "continuous_write": -2,
+            "continuous_write": -1,
             "model_size": "turbo",
             "task": "transcribe" if source_language == target_language else "translate",
         }
@@ -53,13 +53,11 @@ def print_text():
                 f.write(stream.text)
 
             text_output.markdown(stream.text)
-            stream_duration.markdown(f"Stream duration: {stream.stream_duration:.0f} s")
 
         time.sleep(0.2)
 
 
 st.markdown("## Transcript")
-stream_duration = st.empty()
 text_output = st.empty()
 
 print_button = st.sidebar.button("Print")

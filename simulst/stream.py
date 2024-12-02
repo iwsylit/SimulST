@@ -80,21 +80,16 @@ class AsrStream(AudioStream):
 
         self._model = model
         self._language = language
-        self._states = self._model.build_states()
 
     def process_audio(self, audio: Audio) -> str:
         segment = SpeechSegment(
             content=audio.numpy().squeeze().tolist(), sample_rate=audio.sample_rate, finished=False
         )
-        output = self._model.pushpop(segment, states=self._states)
-        self._states.source_finished = False
+        output = self._model.pushpop(segment)
+        if not output.content:
+            return ""
 
         return output.content
-
-    def _on_stop(self) -> None:
-        super()._on_stop()
-
-        self._states = self._model.build_states()
 
 
 class StreamlitWebRtcAsrStream(AsrStream):
