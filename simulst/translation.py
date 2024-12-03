@@ -5,10 +5,13 @@ from simulst.audio import Audio
 T = TypeVar("T", Audio, str)
 
 
-class Transcription(Generic[T]):
-    def __init__(self, source: T, target: str) -> None:
+class Translation(Generic[T]):
+    def __init__(self, source: T, target: str, source_lang: str, target_lang: str) -> None:
         self._source: T = source
         self._target = target
+
+        self._source_lang = source_lang
+        self._target_lang = target_lang
 
     @classmethod
     def fake(cls) -> Self:
@@ -28,14 +31,6 @@ class Transcription(Generic[T]):
     def __eq__(self, other: Self) -> bool:  # type: ignore
         return self.target == other.target
 
-
-class Translation(Transcription, Generic[T]):
-    def __init__(self, source: T, target: str, source_lang: str, target_lang: str) -> None:
-        super().__init__(source, target)
-
-        self._source_lang = source_lang
-        self._target_lang = target_lang
-
     @property
     def source_lang(self) -> str:
         return self._source_lang
@@ -43,12 +38,6 @@ class Translation(Transcription, Generic[T]):
     @property
     def target_lang(self) -> str:
         return self._target_lang
-
-
-class SpeechTranscription(Transcription[Audio]):
-    @classmethod
-    def fake(cls) -> Self:
-        return cls(Audio.fake(), "fake transcription")
 
 
 class SpeechTranslation(Translation[Audio]):
@@ -63,7 +52,7 @@ class TextTranslation(Translation[str]):
         return cls("fake source text", "fake translation", "fake source lang", "fake target lang")
 
 
-B = TypeVar("B", SpeechTranscription, SpeechTranslation, TextTranslation)
+B = TypeVar("B", SpeechTranslation, TextTranslation)
 
 
 class TranscriptionBatch(Generic[B]):
@@ -90,12 +79,6 @@ class TranscriptionBatch(Generic[B]):
             return f"{class_name}:\n- " + "\n- ".join([repr(t) for t in self._items])
         else:
             return f"{class_name} containing {len(self)} items"
-
-
-class SpeechTranscriptionBatch(TranscriptionBatch[SpeechTranscription]):
-    @classmethod
-    def fake(cls, batch_size: int = 2) -> Self:
-        return cls([SpeechTranscription.fake() for _ in range(batch_size)])
 
 
 class SpeechTranslationBatch(TranscriptionBatch[SpeechTranslation]):

@@ -1,9 +1,9 @@
 import array
 from typing import Any, Callable, Iterator, Self, Sequence
 
-import av
 import miniaudio
 import numpy as np
+from av.audio.frame import AudioFrame
 
 
 class Audio:
@@ -89,7 +89,11 @@ class Audio:
         return cls.from_array(samples_array, sample_format=sample_format, **kwargs)
 
     @classmethod
-    def from_av_frame(cls, frame: av.AudioFrame) -> Self:
+    def from_list(cls, samples: list[float], **kwargs: Any) -> Self:
+        return cls.from_numpy(np.array(samples), **kwargs)
+
+    @classmethod
+    def from_av_frame(cls, frame: AudioFrame) -> Self:
         if frame.format.name not in cls._AV_FORMAT_MAP:
             raise ValueError(f"Unsupported format: {frame.format.name}")
 
@@ -130,6 +134,9 @@ class Audio:
             return samples.astype(np.float32)
 
         return samples
+
+    def list(self, normalize: bool = False) -> list[float]:
+        return self.numpy(normalize).tolist()
 
     def convert(
         self,
