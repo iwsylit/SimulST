@@ -59,37 +59,40 @@ class WaitkWhisperAgent(SpeechToTextAgent):
         if states is None:
             states = self.states  # type: ignore
 
-        if self._policy(states):
-            previous_translation = " ".join(states.target)
-            previous_translation = previous_translation.replace(" ,", ",").replace(" .", ".")
-            # TODO: fix audio saved in states to be np array instead of list
-            audio = Audio.from_list(states.source)
-            prediction = self._model.translate(audio, self.source_language, self.target_language, previous_translation)
-            predicted_words = prediction.target.split()
-
-            if len(predicted_words) >= 15:
-                predicted_words = predicted_words[:1]
-            else:
-                predicted_words = predicted_words[: self.continuous_write]
-
-            if audio.duration >= 28:
-                self.states = self.build_states()
-                self.push(
-                    SpeechSegment(
-                        content=audio.numpy().squeeze()[-audio.sample_rate :].tolist(),
-                        sample_rate=audio.sample_rate,
-                        finished=False,
-                    )
-                )
-
-                return ReadAction()
-
-            if len(predicted_words) == 0:
-                return ReadAction()
-
-            return WriteAction(
-                content=" ".join(predicted_words),
-                finished=False,
-            )
-        else:
+        if not self._policy(states):
             return ReadAction()
+
+        previous_translation = " ".join(states.target)
+        previous_translation = previous_translation.replace(" ,", ",").replace(" .", ".")
+        # TODO: fix audio saved in states to be np array instead of list
+        audio = Audio.from_list(states.source)
+
+        if audio.duration >= 28:
+            self.states = self.build_states()
+            self.push(
+                SpeechSegment(
+                    content=audio.numpy().squeeze()[-audio.sample_rate :].tolist(),
+                    sample_rate=audio.sample_rate,
+                    finished=False,
+                )
+            )
+
+            return ReadAction()
+
+        prediction = self._model.translate(audio, self.source_language, self.target_language, previous_translation)
+        predicted_words = prediction.target.split()
+
+        # crutch to prevent model looping
+        if len(predicted_words) >= 10:
+            predicted_words = predicted_words[:1]
+        else:
+            predicted_words = predicted_words[: self.continuous_write]
+
+        if len(predicted_words) == 0:
+            self._no_pred = True
+            return ReadAction()
+
+        return WriteAction(
+            content=" ".join(predicted_words),
+            finished=False,
+        )
