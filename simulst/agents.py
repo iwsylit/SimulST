@@ -28,7 +28,7 @@ class WaitkWhisperAgent(SpeechToTextAgent):
         self._policy = WaitkPolicy(self.waitk_lagging, self.source_segment_size)
 
         if self.task == "translate":
-            assert self.source_language != "en", "source language must be different from en for translation task"
+            assert self.target_language == "en", "target language must be en for translation task"
 
     @classmethod
     def from_dict(cls, config: dict[str, Any]) -> Self:

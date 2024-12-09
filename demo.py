@@ -20,7 +20,7 @@ st.sidebar.title("Language Selection")
 languages = ["ru", "en", "es", "fr", "de", "zh", "ja"]
 
 source_language = st.sidebar.selectbox("Select source language", languages)
-target_language = st.sidebar.selectbox("Select target language", languages[:2])
+target_language = st.sidebar.selectbox("Select target language", languages)
 
 
 @st.cache_resource
