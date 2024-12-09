@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+import torch
 import whisper
 from torch import nn
 
@@ -85,6 +86,7 @@ class WhisperModel(SpeechToTextModel):
     def _load_processor(self) -> nn.Module | None:
         return None
 
+    @torch.inference_mode()
     def _generate(
         self,
         audio: Audio | AudioBatch,
